@@ -1,24 +1,7 @@
-"use client";
-import AppHeader from "@/components/layout/AppHeader";
-import { getCurrentUser } from "@/data/mock-data"; // Mock, replace with actual auth
+// This layout is intentionally minimal to resolve a routing conflict.
+// The active layout can be found at /student/layout.tsx
+import type React from 'react';
 
-export default function StudentLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  // In a real app, user data would come from context/session
-  const currentUser = getCurrentUser('student'); 
-
-  return (
-    <div className="flex flex-col min-h-screen">
-      <AppHeader currentRole="student" userName={currentUser.name} />
-      <main className="flex-grow container mx-auto px-4 py-8">
-        {children}
-      </main>
-      <footer className="py-4 text-center text-sm text-muted-foreground border-t">
-         Missedit Student Portal &copy; {new Date().getFullYear()}
-      </footer>
-    </div>
-  );
+export default function DisabledLayout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
