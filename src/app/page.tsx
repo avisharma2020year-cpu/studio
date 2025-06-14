@@ -1,3 +1,92 @@
-export default function Home() {
-  return <></>;
+import Link from 'next/link';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import AppLogo from '@/components/shared/AppLogo';
+import { Users, UserCheck, ShieldCheck, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
+
+export default function HomePage() {
+  const portals = [
+    {
+      role: 'Student',
+      icon: <Users className="h-10 w-10 text-primary" />,
+      title: 'Student Portal',
+      description: 'Access your timetable, submit absence requests, and track their status.',
+      href: '/student/dashboard',
+      image: 'https://placehold.co/600x400.png',
+      imageHint: 'students classroom'
+    },
+    {
+      role: 'Faculty',
+      icon: <UserCheck className="h-10 w-10 text-primary" />,
+      title: 'Faculty Portal',
+      description: 'Review and manage absence requests for your assigned subjects.',
+      href: '/faculty/dashboard',
+      image: 'https://placehold.co/600x400.png',
+      imageHint: 'teacher lecture'
+    },
+    {
+      role: 'Admin',
+      icon: <ShieldCheck className="h-10 w-10 text-primary" />,
+      title: 'Admin Dashboard',
+      description: 'Manage users, timetables, events, and view system-wide request logs.',
+      href: '/admin/dashboard',
+      image: 'https://placehold.co/600x400.png',
+      imageHint: 'admin dashboard'
+    },
+  ];
+
+  return (
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-background to-secondary/30">
+      <header className="py-6 px-4 md:px-8 flex justify-center">
+        <AppLogo size="lg" />
+      </header>
+
+      <main className="flex-grow container mx-auto px-4 py-8 md:py-16">
+        <section className="text-center mb-12 md:mb-16">
+          <h2 className="text-4xl md:text-5xl font-bold font-headline mb-4 text-foreground">
+            Welcome to Missedit
+          </h2>
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+            Your streamlined solution for managing class absence requests. Select your portal to get started.
+          </p>
+        </section>
+
+        <section className="grid md:grid-cols-3 gap-8">
+          {portals.map((portal) => (
+            <Card key={portal.role} className="flex flex-col overflow-hidden shadow-xl hover:shadow-2xl transition-shadow duration-300 rounded-xl">
+              <CardHeader className="p-0">
+                <Image 
+                  src={portal.image} 
+                  alt={`${portal.title} illustration`} 
+                  width={600} 
+                  height={400} 
+                  className="w-full h-48 object-cover"
+                  data-ai-hint={portal.imageHint}
+                />
+              </CardHeader>
+              <CardContent className="flex flex-col flex-grow p-6">
+                <div className="flex items-center mb-4">
+                  {portal.icon}
+                  <CardTitle className="ml-3 text-2xl font-headline">{portal.title}</CardTitle>
+                </div>
+                <CardDescription className="mb-6 text-base flex-grow">
+                  {portal.description}
+                </CardDescription>
+                <Button asChild className="mt-auto w-full group bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Link href={portal.href}>
+                    Go to {portal.role} Portal <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </section>
+      </main>
+
+      <footer className="py-8 text-center text-muted-foreground">
+        <p>&copy; {new Date().getFullYear()} Missedit. All rights reserved.</p>
+      </footer>
+    </div>
+  );
 }
