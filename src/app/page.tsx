@@ -45,10 +45,10 @@ export default function HomePage() {
       <main className="flex-grow container mx-auto px-4 py-8 md:py-16">
         <section className="text-center mb-12 md:mb-16">
           <h2 className="text-4xl md:text-5xl font-bold font-headline mb-4 text-foreground">
-            Welcome to Missedit
+            Welcome to AttendEase
           </h2>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-            Your streamlined solution for managing class absence requests. Select your portal to get started.
+            Your streamlined solution for managing student attendance excuses. Select your portal to get started.
           </p>
         </section>
 
@@ -85,7 +85,7 @@ export default function HomePage() {
       </main>
 
       <footer className="py-8 text-center text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Missedit. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} AttendEase. All rights reserved.</p>
       </footer>
     </div>
   );

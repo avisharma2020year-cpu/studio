@@ -17,7 +17,7 @@ export default function StudentLayout({
         {children}
       </main>
       <footer className="py-4 text-center text-sm text-muted-foreground border-t">
-         Missedit Student Portal &copy; {new Date().getFullYear()}
+         AttendEase Student Portal &copy; {new Date().getFullYear()}
       </footer>
     </div>
   );

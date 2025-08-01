@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Missedit - Class Absence Management',
-  description: 'Streamlined system for managing student class absence requests.',
+  title: 'AttendEase - Smart Attendance Excuse System',
+  description: 'A streamlined system for managing student attendance excuses for events and official duties.',
 };
 
 export default function RootLayout({

@@ -25,7 +25,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-8">
       <div>
         <h2 className="text-3xl font-bold font-headline mb-2">Admin Overview</h2>
-        <p className="text-muted-foreground">Key metrics and quick actions for managing the Missedit system.</p>
+        <p className="text-muted-foreground">Key metrics and quick actions for managing the AttendEase system.</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

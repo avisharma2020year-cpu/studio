@@ -16,7 +16,7 @@ export default function FacultyLayout({
         {children}
       </main>
       <footer className="py-4 text-center text-sm text-muted-foreground border-t">
-         Missedit Faculty Portal &copy; {new Date().getFullYear()}
+         AttendEase Faculty Portal &copy; {new Date().getFullYear()}
       </footer>
     </div>
   );

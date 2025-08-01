@@ -54,7 +54,7 @@ export default function AdminLayout({
             {children}
           </main>
           <footer className="py-4 px-6 text-center text-sm text-muted-foreground border-t">
-            Missedit Admin Panel &copy; {new Date().getFullYear()}
+            AttendEase Admin Panel &copy; {new Date().getFullYear()}
           </footer>
         </SidebarInset>
       </div>

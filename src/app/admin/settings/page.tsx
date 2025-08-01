@@ -7,7 +7,7 @@ export default function AdminSettingsPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-headline flex items-center"><Settings className="mr-2 h-6 w-6 text-primary" />System Settings</CardTitle>
-          <CardDescription>Configure system-wide settings for Missedit. (This page is a placeholder)</CardDescription>
+          <CardDescription>Configure system-wide settings for AttendEase. (This page is a placeholder)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="py-12 flex flex-col items-center justify-center text-center">

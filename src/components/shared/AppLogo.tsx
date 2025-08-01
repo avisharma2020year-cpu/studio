@@ -8,7 +8,7 @@ const AppLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
   return (
     <Link href="/" className="flex items-center gap-2 text-primary hover:opacity-80 transition-opacity">
       <FileText size={iconSize} className="text-accent" />
-      <h1 className={`font-headline font-bold ${textSizeClass}`}>Missedit</h1>
+      <h1 className={`font-headline font-bold ${textSizeClass}`}>AttendEase</h1>
     </Link>
   );
 };
