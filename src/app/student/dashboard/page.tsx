@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { mockTimetable, mockEvents, getCurrentUser, mockRequests } from '@/data/mock-data';
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History } from 'lucide-react';
+import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle } from 'lucide-react';
 import Link from 'next/link';
 
 // Helper to group timetable by day
@@ -65,42 +65,58 @@ export default function StudentDashboardPage() {
       return;
     }
 
-    const newRequestId = `req${Date.now()}`;
-    const missedClassDetails = selectedClasses.map(classId => {
-      const entry = Object.values(timetable).flat().find(cls => cls.id === classId);
+    const allTimetableEntries = Object.values(timetable).flat();
+    const selectedClassDetails = selectedClasses.map(classId => {
+      const entry = allTimetableEntries.find(cls => cls.id === classId);
       if (!entry) throw new Error(`Class with id ${classId} not found in timetable`);
-      return { 
-        classId: entry.id, 
-        subjectName: entry.subjectName, 
-        timeSlot: entry.timeSlot,
-        day: entry.day
-      };
+      return entry;
     });
 
-    // Simplified faculty assignment: take the faculty from the first selected class.
-    // In a real app, this might need to be more complex if classes have different faculties.
-    const firstClassEntry = Object.values(timetable).flat().find(cls => cls.id === selectedClasses[0]);
+    // Group selected classes by facultyId
+    const requestsByFaculty = selectedClassDetails.reduce((acc, classDetail) => {
+      const facultyId = classDetail.facultyId;
+      if (!facultyId) return acc; // Skip if faculty ID is somehow missing
+      if (!acc[facultyId]) {
+        acc[facultyId] = [];
+      }
+      acc[facultyId].push({
+        classId: classDetail.id,
+        subjectName: classDetail.subjectName,
+        timeSlot: classDetail.timeSlot,
+        day: classDetail.day,
+      });
+      return acc;
+    }, {} as Record<string, MissedClassRequest['missedClasses']>);
 
-    const newRequest: MissedClassRequest = {
-      id: newRequestId,
-      studentId: currentUser.id,
-      studentName: currentUser.name,
-      studentPrn: currentUser.prn!,
-      missedClasses: missedClassDetails,
-      reason,
-      eventId: selectedEvent,
-      timestamp: new Date().toISOString(),
-      status: 'Pending',
-      facultyId: firstClassEntry?.facultyId 
-    };
+
+    const newRequests: MissedClassRequest[] = Object.entries(requestsByFaculty).map(([facultyId, missedClasses]) => {
+      const newRequestId = `req${Date.now()}${Math.random().toString(36).substring(2, 7)}`;
+      return {
+        id: newRequestId,
+        studentId: currentUser.id,
+        studentName: currentUser.name,
+        studentPrn: currentUser.prn!,
+        missedClasses: missedClasses,
+        reason,
+        eventId: selectedEvent,
+        timestamp: new Date().toISOString(),
+        status: 'Pending',
+        facultyId: facultyId,
+      };
+    });
+    
+    if (newRequests.length === 0) {
+        toast({ title: "Error", description: "Could not determine faculty for selected classes.", variant: "destructive" });
+        return;
+    }
 
     // Simulate API call
-    console.log("Submitting request:", newRequest);
+    console.log("Submitting requests:", newRequests);
     // Add to mock data (in real app, this would be a server action)
-    mockRequests.unshift(newRequest); // Add to beginning for most recent
-    setStudentRequests(prev => [newRequest, ...prev]);
+    mockRequests.unshift(...newRequests);
+    setStudentRequests(prev => [...newRequests, ...prev]);
 
-    toast({ title: "Success", description: "Absence request submitted successfully." });
+    toast({ title: "Success", description: `${newRequests.length} absence request(s) submitted successfully.` });
     setSelectedClasses([]);
     setReason('');
     setSelectedEvent(undefined);
@@ -112,6 +128,15 @@ export default function StudentDashboardPage() {
       case 'Rejected': return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
       case 'Pending': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300';
       default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    }
+  };
+  
+   const getStatusIcon = (status: MissedClassRequest['status']) => {
+    switch (status) {
+      case 'Approved': return <CheckCircle className="mr-1.5 h-3.5 w-3.5" />;
+      case 'Pending': return <Clock className="mr-1.5 h-3.5 w-3.5" />;
+      case 'Rejected': return <XCircle className="mr-1.5 h-3.5 w-3.5" />;
+      default: return null;
     }
   };
 
@@ -217,9 +242,7 @@ export default function StudentDashboardPage() {
                       <p className="text-sm mt-1">Reason: <span className="text-muted-foreground">{req.reason}</span></p>
                     </div>
                     <span className={`px-3 py-1.5 text-xs font-semibold rounded-full flex items-center self-start sm:self-center whitespace-nowrap ${getStatusBadgeClasses(req.status)}`}>
-                      {req.status === 'Approved' && <CheckCircle className="mr-1.5 h-3.5 w-3.5" />}
-                      {req.status === 'Pending' && <Clock className="mr-1.5 h-3.5 w-3.5" />}
-                      {req.status === 'Rejected' && <CheckCircle className="mr-1.5 h-3.5 w-3.5" />} {/* Consider XCircle for Rejected */}
+                      {getStatusIcon(req.status)}
                       {req.status}
                     </span>
                   </div>

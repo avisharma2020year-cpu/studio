@@ -20,12 +20,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { mockTimetable, mockUsers } from '@/data/mock-data';
 import type { TimetableEntry } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2 } from 'lucide-react';
+import Papa from 'papaparse';
+import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
+
 
 const initialNewTimetableEntryState: Omit<TimetableEntry, 'id'> = {
   day: 'Monday',
@@ -46,7 +48,8 @@ export default function AdminTimetablesPage() {
   
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [semesterFilter, setSemesterFilter] = useState<string>('all');
-
+  
+  const [isUploading, setIsUploading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimetableEntry | null>(null);
   const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'>>(initialNewTimetableEntryState);
@@ -123,22 +126,46 @@ export default function AdminTimetablesPage() {
   
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Basic CSV/Excel processing (Placeholder)
-      // In a real app, use a library like PapaParse for CSV or SheetJS for Excel
-      // For demo, we'll just log and show a toast
-      console.log("Uploaded file:", file.name, file.type);
-      if (file.type === "text/csv" || file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
-        // Here you would parse the file and update `mockTimetable` and `timetableEntries`
-        toast({ title: "File Uploaded", description: `${file.name} uploaded. Processing would happen here.`});
-      } else {
-        toast({ title: "Invalid File Type", description: "Please upload a CSV or Excel file.", variant: "destructive"});
-      }
+    if (!file) return;
+
+    if (file.type !== "text/csv") {
+        toast({ title: "Invalid File Type", description: "Please upload a CSV file.", variant: "destructive"});
+        return;
     }
+    
+    setIsUploading(true);
+
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const newEntries = await uploadTimetable(results.data);
+          // In a real app, you would replace the mock data logic with a proper state management solution
+          mockTimetable.splice(0, mockTimetable.length, ...newEntries);
+          setTimetableEntries(newEntries);
+          toast({ title: "Success", description: "Timetable uploaded and processed successfully." });
+        } catch (error) {
+          console.error("Error processing timetable:", error);
+          toast({ title: "Upload Failed", description: "Could not process the uploaded timetable file.", variant: "destructive" });
+        } finally {
+          setIsUploading(false);
+          // Reset file input to allow re-uploading the same file
+          if (event.target) {
+            event.target.value = "";
+          }
+        }
+      },
+      error: (error) => {
+        console.error("Error parsing CSV:", error);
+        toast({ title: "Parsing Error", description: "Could not parse the CSV file.", variant: "destructive"});
+        setIsUploading(false);
+      }
+    });
   };
 
-  const uniqueCourses = ['all', ...new Set(mockTimetable.map(e => e.course))];
-  const uniqueSemesters = ['all', ...new Set(mockTimetable.map(e => e.semester.toString()))].sort();
+  const uniqueCourses = ['all', ...new Set(timetableEntries.map(e => e.course))];
+  const uniqueSemesters = ['all', ...new Set(timetableEntries.map(e => e.semester.toString()))].sort();
 
 
   const filteredEntries = timetableEntries.filter(entry => 
@@ -153,13 +180,14 @@ export default function AdminTimetablesPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-2xl font-headline flex items-center"><CalendarDays className="mr-2 h-6 w-6 text-primary" />Timetable Management</CardTitle>
-            <CardDescription>Manage class schedules. Upload CSV/Excel or add entries manually.</CardDescription>
+            <CardDescription>Manage class schedules. Upload CSV or add entries manually.</CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => document.getElementById('fileUpload')?.click()} className="hidden sm:flex">
-              <Upload className="mr-2 h-4 w-4" /> Upload Timetable
+            <Button variant="outline" onClick={() => document.getElementById('fileUpload')?.click()} disabled={isUploading} className="hidden sm:flex">
+              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              {isUploading ? 'Uploading...' : 'Upload Timetable'}
             </Button>
-            <Input type="file" id="fileUpload" className="hidden" onChange={handleFileUpload} accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" />
+            <Input type="file" id="fileUpload" className="hidden" onChange={handleFileUpload} accept=".csv" disabled={isUploading} />
             <Button onClick={openFormForNew} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Entry
             </Button>
@@ -167,8 +195,9 @@ export default function AdminTimetablesPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center">
-            <Button variant="outline" onClick={() => document.getElementById('fileUpload')?.click()} className="flex sm:hidden w-full">
-                <Upload className="mr-2 h-4 w-4" /> Upload Timetable
+            <Button variant="outline" onClick={() => document.getElementById('fileUpload')?.click()} disabled={isUploading} className="flex sm:hidden w-full">
+                {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                {isUploading ? 'Uploading...' : 'Upload Timetable'}
             </Button>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Filter className="h-4 w-4 text-muted-foreground" />
@@ -230,7 +259,7 @@ export default function AdminTimetablesPage() {
             </Table>
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">No timetable entries found matching your criteria.</p>
+            <p className="text-center text-muted-foreground py-8">No timetable entries found. Upload a CSV to get started.</p>
           )}
         </CardContent>
       </Card>
