@@ -45,7 +45,7 @@ export default function AdminSidebarNav() {
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             {group.items.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <Link href={item.href} legacyBehavior passHref>
+                <Link href={item.href} passHref>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.href || (item.href !== '/admin/dashboard' && pathname.startsWith(item.href))}
@@ -53,10 +53,10 @@ export default function AdminSidebarNav() {
                     disabled={item.disabled}
                     aria-disabled={item.disabled}
                   >
-                    <a>
+                    <span>
                       <item.icon />
                       <span>{item.label}</span>
-                    </a>
+                    </span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
