@@ -180,7 +180,7 @@ export default function AdminUsersPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Details</TableHead> {/* PRN/Course for Student, Subjects for Faculty */}
+                    <TableHead>Details</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -193,8 +193,9 @@ export default function AdminUsersPage() {
                         <Badge variant={getRoleBadgeVariant(user.role)}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</Badge>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {user.role === 'student' && `PRN: ${user.prn || 'N/A'}, ${user.course || 'N/A'} Sem ${user.semester || 'N/A'}`}
-                        {user.role === 'faculty' && `Subjects: ${(user.subjects && user.subjects.length > 0) ? user.subjects.join(', ') : 'N/A'}`}
+                        {user.role === 'student' ? `PRN: ${user.prn || 'N/A'}, ${user.course || 'N/A'} Sem ${user.semester || 'N/A'}` :
+                         user.role === 'faculty' ? `Subjects: ${(user.subjects && user.subjects.length > 0) ? user.subjects.join(', ') : 'N/A'}` :
+                         null}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="outline" size="icon" onClick={() => openFormForEdit(user)} aria-label="Edit user">
