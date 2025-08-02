@@ -33,7 +33,8 @@ export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
 
   useEffect(() => {
     setMounted(true);
-    setIsDarkMode(document.documentElement.classList.contains('dark'));
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setIsDarkMode(document.documentElement.classList.contains('dark') || prefersDark);
   }, []);
   
   const toggleTheme = () => {
@@ -56,6 +57,10 @@ export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
     if (!name) return 'U';
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
+  
+  if (!mounted) {
+    return null; // Don't render on the server to avoid hydration mismatches
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
