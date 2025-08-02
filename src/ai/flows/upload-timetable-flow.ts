@@ -3,32 +3,12 @@
  * @fileOverview A flow for processing uploaded timetable data.
  *
  * - uploadTimetable - A function that handles parsing and validating timetable CSV data.
- * - TimetableUploadInput - The input type for the uploadTimetable function.
- * - TimetableUploadOutput - The return type for the uploadTimetable function.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
 import { mockUsers } from '@/data/mock-data';
 import type { TimetableEntry } from '@/lib/types';
-
-// Define the expected shape of a single row from the CSV
-const TimetableRowSchema = z.object({
-  Day: z.string(),
-  'Time Slot': z.string(),
-  Subject: z.string(),
-  Faculty: z.string(),
-  Course: z.string(),
-  Semester: z.string().transform(val => parseInt(val, 10)),
-});
-
-// The input to our flow will be an array of these rows
-export const TimetableUploadInputSchema = z.array(TimetableRowSchema);
-export type TimetableUploadInput = z.infer<typeof TimetableUploadInputSchema>;
-
-// The output will be a structured array of TimetableEntry objects
-export const TimetableUploadOutputSchema = z.array(z.custom<TimetableEntry>());
-export type TimetableUploadOutput = z.infer<typeof TimetableUploadOutputSchema>;
+import { TimetableUploadInputSchema, TimetableUploadOutputSchema, type TimetableUploadInput, type TimetableUploadOutput } from '@/lib/schemas/timetable';
 
 
 export async function uploadTimetable(input: TimetableUploadInput): Promise<TimetableUploadOutput> {
