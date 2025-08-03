@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { getCurrentUser } from '@/data/mock-data';
+import { getCurrentUser, mockRequests, mockEvents } from '@/data/mock-data';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Clock, ListFilter, FileText, Loader2 } from 'lucide-react';
@@ -16,8 +16,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from 'date-fns';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function MyRequestsPage() {
   const currentUser = getCurrentUser('student');
@@ -31,15 +29,12 @@ export default function MyRequestsPage() {
       setIsLoading(true);
       if (!currentUser?.id) return;
       try {
-        const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
-        const requestsSnapshot = await getDocs(requestsQuery);
-        const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+        // Using mock data for prototype
+        const requestsData = mockRequests.filter(req => req.studentId === currentUser.id)
                                       .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setRequests(requestsData);
+        setEvents(mockEvents);
 
-        const eventsSnapshot = await getDocs(collection(db, "events"));
-        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
-        setEvents(eventsData);
       } catch (error) {
         console.error("Error fetching requests:", error);
       } finally {

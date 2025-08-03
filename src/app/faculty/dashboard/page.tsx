@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { getCurrentUser } from '@/data/mock-data';
+import { getCurrentUser, mockRequests, mockEvents } from '@/data/mock-data';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } from 'lucide-react';
@@ -29,26 +29,17 @@ export default function FacultyDashboardPage() {
     try {
       if (!currentUser?.id) {
         setRequests([]);
+        setIsLoading(false);
         return;
       }
       
-      const facultyRequestsQuery = query(
-        collection(db, "requests"), 
-        where("status", "==", "Pending"), 
-        where("facultyId", "==", currentUser.id)
+      // Using mock data for prototype
+      const facultyRequests = mockRequests.filter(
+        req => req.facultyId === currentUser.id && req.status === 'Pending'
       );
       
-      const [requestsSnapshot, eventsSnapshot] = await Promise.all([
-          getDocs(facultyRequestsQuery),
-          getDocs(collection(db, "events"))
-      ]);
-
-      const facultyRequests = requestsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
-        .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
       setRequests(facultyRequests);
-      setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+      setEvents(mockEvents);
 
     } catch (error) {
       console.error("Error fetching faculty requests:", error);
@@ -69,25 +60,17 @@ export default function FacultyDashboardPage() {
       return;
     }
     
-    // Optimistically update UI
-    const originalRequests = [...requests];
-    setRequests(requests.filter(req => req.id !== requestId));
-    
-    try {
-        const requestDocRef = doc(db, "requests", requestId);
-        await updateDoc(requestDocRef, {
-            status: status,
-            facultyComment: comment,
-        });
-
-        toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
-        // No need to refetch, already removed from list
-    } catch (error) {
-        // Revert UI on error
-        setRequests(originalRequests);
-        console.error("Error updating request status:", error);
-        toast({ title: "Error", description: "Failed to update request.", variant: "destructive" });
+    // Simulate updating mock data
+    const requestIndex = mockRequests.findIndex(req => req.id === requestId);
+    if (requestIndex !== -1) {
+        mockRequests[requestIndex].status = status;
+        mockRequests[requestIndex].facultyComment = comment;
     }
+
+    toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
+    
+    // Refresh the view from the modified mock data
+    fetchFacultyData();
   };
   
    const getEventName = (eventId?: string) => {

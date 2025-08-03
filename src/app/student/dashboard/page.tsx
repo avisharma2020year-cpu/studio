@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCurrentUser } from '@/data/mock-data'; 
+import { getCurrentUser, mockTimetable, mockEvents, mockRequests } from '@/data/mock-data'; 
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
@@ -51,35 +51,22 @@ export default function StudentDashboardPage() {
             if (!currentUser.course || !currentUser.semester) {
                 toast({ title: "User Profile Incomplete", description: "Your course and semester are not set.", variant: "destructive"});
                 setTimetable({});
+                setIsLoading(false);
                 return;
             }
 
-            const timetableQuery = query(collection(db, "timetables"), 
-              where("course", "==", currentUser.course), 
-              where("semester", "==", currentUser.semester)
+            // Using mock data for prototype
+            const userTimetable = mockTimetable.filter(
+                (entry) => entry.course === currentUser.course && entry.semester === currentUser.semester
             );
 
-            const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
-            
-            const [timetableSnapshot, eventsSnapshot, requestsSnapshot] = await Promise.all([
-                getDocs(timetableQuery),
-                getDocs(collection(db, "events")),
-                getDocs(requestsQuery),
-            ]);
-
-            const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
             setAllTimetableEntries(userTimetable);
             setTimetable(groupTimetableByDay(userTimetable));
-
-            const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
-            setEvents(eventsData);
-
-            const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
-                                     .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            setStudentRequests(requestsData);
+            setEvents(mockEvents);
+            setStudentRequests(mockRequests.filter(req => req.studentId === currentUser.id));
 
         } catch (error) {
-            console.error("Error fetching data from Firestore:", error);
+            console.error("Error fetching data:", error);
             toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
         } finally {
             setIsLoading(false);
@@ -131,8 +118,11 @@ export default function StudentDashboardPage() {
     }, {} as Record<string, { facultyId: string; missedClasses: MissedClassRequest['missedClasses'] }>);
 
     try {
-      const requestPromises = Object.values(requestsByFaculty).map((facultyRequest) => {
-          const newRequestPayload = {
+      // In a real app, this would save to Firestore. For the prototype, we can simulate it.
+      console.log("Submitting requests:", requestsByFaculty);
+      Object.values(requestsByFaculty).forEach(facultyRequest => {
+          const newRequest: MissedClassRequest = {
+            id: `req-${Date.now()}-${Math.random()}`,
             studentId: currentUser.id,
             studentName: currentUser.name,
             studentPrn: currentUser.prn!,
@@ -144,12 +134,12 @@ export default function StudentDashboardPage() {
             facultyId: facultyRequest.facultyId,
             facultyComment: ''
           };
-          return addDoc(collection(db, "requests"), newRequestPayload);
+          // Add to mock requests for this session
+          mockRequests.push(newRequest);
       });
 
-      await Promise.all(requestPromises);
 
-      toast({ title: "Success", description: `${requestPromises.length} absence request(s) submitted.` });
+      toast({ title: "Success", description: `${Object.keys(requestsByFaculty).length} absence request(s) submitted.` });
       
       setSelectedClasses([]);
       setReason('');
