@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow for processing uploaded timetable data.
@@ -28,9 +29,15 @@ const uploadTimetableFlow = ai.defineFlow(
 
     // Fetch faculty from Firestore to map names to IDs
     const usersSnapshot = await getDocs(collection(db, "users"));
-    const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    // Correctly map the document data to User objects and then create the map
+    const users = usersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return { id: doc.id, ...data } as User;
+    });
+    
     const facultyMap = new Map(users.filter(u => u.role === 'faculty').map(u => [u.name, u.id]));
-
+    
+    console.log('Faculty Map:', facultyMap);
 
     const newTimetable: TimetableEntry[] = rows.map((row, index) => {
       const facultyId = facultyMap.get(row.Faculty);
@@ -50,7 +57,7 @@ const uploadTimetableFlow = ai.defineFlow(
       };
     }).filter(entry => entry.day && entry.timeSlot && entry.subjectName); // Basic validation
 
-    console.log('Processed timetable entries:', newTimetable);
+    console.log(`Processed ${newTimetable.length} valid timetable entries.`);
     return newTimetable;
   }
 );
