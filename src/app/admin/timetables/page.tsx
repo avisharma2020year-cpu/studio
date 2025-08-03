@@ -65,7 +65,7 @@ export default function AdminTimetablesPage() {
         setTimetableEntries(entries);
         
         const usersSnapshot = await getDocs(collection(db, "users"));
-        const users = usersSnapshot.docs.map(doc => doc.data() as User);
+        const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
         setFacultyList(users.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
 
     } catch (error) {
@@ -318,7 +318,7 @@ export default function AdminTimetablesPage() {
             {/* Form fields: Day, Time Slot, Subject Name, Faculty Name (select from list), Course, Semester */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="day" className="text-right">Day</Label>
-              <Select value={formData.day} onValueChange={(value) => handleSelectChange('day', value)}>
+              <Select value={formData.day} onValueChange={(value) => handleSelectChange('day', value as TimetableEntry['day'])}>
                 <SelectTrigger id="day" className="col-span-3">
                   <SelectValue placeholder="Select day" />
                 </SelectTrigger>
