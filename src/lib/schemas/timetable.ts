@@ -2,20 +2,18 @@
 import { z } from 'zod';
 import type { TimetableEntry } from '@/lib/types';
 
-// A flexible schema to handle variations in CSV headers like 'Day' vs 'day'
+// Stricter schema to handle CSV header variations and data types
 const TimetableRowSchema = z.object({
-    Day: z.string({ required_error: "CSV must include a 'Day' or 'day' column." }).min(1, "Day cannot be empty."),
-    'Time Slot': z.string({ required_error: "CSV must include a 'Time Slot' or 'time_slot' column." }).min(1, "Time Slot cannot be empty."),
-    Subject: z.string({ required_error: "CSV must include a 'Subject' or 'subject' column." }).min(1, "Subject cannot be empty."),
+    Day: z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
+    'Time Slot': z.string().min(1, "Time Slot cannot be empty."),
+    Subject: z.string().min(1, "Subject cannot be empty."),
     Faculty: z.string().optional().default(''),
-    Course: z.string({ required_error: "CSV must include a 'Course' or 'course' column." }).min(1, "Course cannot be empty."),
+    Course: z.string().min(1, "Course cannot be empty."),
     Semester: z.coerce.number({ invalid_type_error: "Semester must be a number." }),
-  }).transform((data) => ({
-      // This transform block is for future-proofing and consistency if needed,
-      // but the main fix is z.coerce.number()
-      ...data,
-  }));
-
+  });
+  
+// This transform normalizes various possible header names from the CSV
+// into the strict format defined by TimetableRowSchema.
 const FlexibleTimetableRowSchema = z.any().transform((arg, ctx) => {
     if (typeof arg !== 'object' || arg === null) {
         ctx.addIssue({
@@ -28,9 +26,9 @@ const FlexibleTimetableRowSchema = z.any().transform((arg, ctx) => {
     const data = arg as Record<string, unknown>;
     const normalized = {
       Day: data.Day || data.day,
-      'Time Slot': data['Time Slot'] || data.time_slot,
+      'Time Slot': data['Time Slot'] || data['time_slot'] || data.TimeSlot,
       Subject: data.Subject || data.subject,
-      Faculty: data.Faculty || data.faculty_name,
+      Faculty: data.Faculty || data.facultyName || data.faculty_name,
       Course: data.Course || data.course,
       Semester: data.Semester || data.semester,
     };

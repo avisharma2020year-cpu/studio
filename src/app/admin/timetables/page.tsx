@@ -28,7 +28,7 @@ import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2 } from
 import Papa from 'papaparse';
 import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
 
 
 const initialNewTimetableEntryState: Omit<TimetableEntry, 'id'> = {
@@ -61,17 +61,13 @@ export default function AdminTimetablesPage() {
   const fetchTimetableData = async () => {
     setIsLoading(true);
     try {
-        const [timetableSnapshot, usersSnapshot] = await Promise.all([
-            getDocs(collection(db, "timetables")),
-            getDocs(collection(db, "users"))
-        ]);
-        
+        const timetableSnapshot = await getDocs(collection(db, "timetables"));
         const entries = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
         setTimetableEntries(entries);
-        
-        const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-        setFacultyList(users.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
 
+        const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
+        const usersSnapshot = await getDocs(facultyQuery);
+        setFacultyList(usersSnapshot.docs.map(doc => ({ id: doc.id, name: (doc.data() as User).name })));
     } catch (error) {
         console.error("Error fetching data:", error);
         toast({ title: "Error", description: "Could not fetch timetable data.", variant: "destructive" });
@@ -178,6 +174,10 @@ export default function AdminTimetablesPage() {
       complete: async (results) => {
         try {
           const newEntries = await uploadTimetable(results.data);
+          if (newEntries.length === 0) {
+            toast({ title: "Upload Info", description: "No new valid entries were found to add.", variant: "destructive" });
+            return;
+          }
           
           const batch = writeBatch(db);
           newEntries.forEach((entry) => {
@@ -269,7 +269,7 @@ export default function AdminTimetablesPage() {
             </div>
           </div>
         
-           {isLoading ? (
+           {isLoading && !isUploading ? (
              <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
              </div>

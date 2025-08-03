@@ -48,6 +48,12 @@ export default function StudentDashboardPage() {
   const fetchStudentData = async () => {
         setIsLoading(true);
         try {
+            if (!currentUser.course || !currentUser.semester) {
+                toast({ title: "User Profile Incomplete", description: "Your course and semester are not set.", variant: "destructive"});
+                setTimetable({});
+                return;
+            }
+
             const timetableQuery = query(collection(db, "timetables"), 
               where("course", "==", currentUser.course), 
               where("semester", "==", currentUser.semester)

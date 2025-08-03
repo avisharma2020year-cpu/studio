@@ -12,8 +12,7 @@ export const mockUsers: User[] = [
 ];
 
 // NOTE: The application now uses Firestore for all dynamic data.
-// These mock arrays are empty and deprecated.
-
+// These mock arrays are empty and should not be used.
 export const mockTimetable: TimetableEntry[] = [];
 export const mockRequests: MissedClassRequest[] = [];
 export const mockEvents: PreApprovedEvent[] = [];

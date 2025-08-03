@@ -27,18 +27,23 @@ export default function FacultyDashboardPage() {
   const fetchFacultyData = async () => {
     setIsLoading(true);
     try {
-      if (!currentUser || !currentUser.subjects || currentUser.subjects.length === 0) {
+      if (!currentUser?.id) {
         setRequests([]);
         return;
       }
       
+      const facultyRequestsQuery = query(
+        collection(db, "requests"), 
+        where("status", "==", "Pending"), 
+        where("facultyId", "==", currentUser.id)
+      );
+      
       const [requestsSnapshot, eventsSnapshot] = await Promise.all([
-          query(collection(db, "requests"), where("status", "==", "Pending"), where("facultyId", "==", currentUser.id)),
+          getDocs(facultyRequestsQuery),
           getDocs(collection(db, "events"))
       ]);
 
-      const requestsDocs = await getDocs(requestsSnapshot);
-      const facultyRequests = requestsDocs.docs
+      const facultyRequests = requestsSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
         .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
@@ -64,7 +69,10 @@ export default function FacultyDashboardPage() {
       return;
     }
     
-    setIsLoading(true);
+    // Optimistically update UI
+    const originalRequests = [...requests];
+    setRequests(requests.filter(req => req.id !== requestId));
+    
     try {
         const requestDocRef = doc(db, "requests", requestId);
         await updateDoc(requestDocRef, {
@@ -73,13 +81,12 @@ export default function FacultyDashboardPage() {
         });
 
         toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
-        await fetchFacultyData(); // Refresh list
-
+        // No need to refetch, already removed from list
     } catch (error) {
+        // Revert UI on error
+        setRequests(originalRequests);
         console.error("Error updating request status:", error);
         toast({ title: "Error", description: "Failed to update request.", variant: "destructive" });
-    } finally {
-        setIsLoading(false);
     }
   };
   
@@ -143,10 +150,10 @@ export default function FacultyDashboardPage() {
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-3 pt-4 border-t mt-auto">
-                      <Button variant="outline" onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="text-red-600 border-red-500 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300" disabled={isLoading}>
+                      <Button variant="outline" onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="text-red-600 border-red-500 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300">
                         <X className="mr-2 h-4 w-4" /> Reject
                       </Button>
-                      <Button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-green-950" disabled={isLoading}>
+                      <Button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-green-950">
                         <Check className="mr-2 h-4 w-4" /> Approve
                       </Button>
                     </CardFooter>

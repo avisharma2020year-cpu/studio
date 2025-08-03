@@ -9,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import type { TimetableEntry, User } from '@/lib/types';
 import { TimetableUploadInputSchema, TimetableUploadOutputSchema, type TimetableUploadInput, type TimetableUploadOutput } from '@/lib/schemas/timetable';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 
@@ -28,14 +28,14 @@ const uploadTimetableFlow = ai.defineFlow(
     console.log('Processing uploaded timetable data:', rows);
 
     // Fetch faculty from Firestore to map names to IDs
-    const usersSnapshot = await getDocs(collection(db, "users"));
-    // Correctly map the document data to User objects and then create the map
-    const users = usersSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return { id: doc.id, ...data } as User;
-    });
+    const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
+    const usersSnapshot = await getDocs(facultyQuery);
     
-    const facultyMap = new Map(users.filter(u => u.role === 'faculty').map(u => [u.name, u.id]));
+    // Correctly map the document data to a Map of name -> id
+    const facultyMap = new Map(usersSnapshot.docs.map(doc => {
+        const data = doc.data() as User;
+        return [data.name, doc.id];
+    }));
     
     console.log('Faculty Map:', facultyMap);
 
