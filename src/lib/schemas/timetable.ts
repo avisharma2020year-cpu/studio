@@ -3,7 +3,7 @@ import type { TimetableEntry } from '@/lib/types';
 
 // Define the expected shape of a single row from the CSV, allowing for variations in headers
 const TimetableRowSchema = z.object({
-  Day: z.string().optional(), // Make original keys optional
+  Day: z.string().optional(), 
   day: z.string().optional(),
   'Time Slot': z.string().optional(),
   time_slot: z.string().optional(),
@@ -13,8 +13,8 @@ const TimetableRowSchema = z.object({
   faculty_name: z.string().optional(),
   Course: z.string().optional(),
   course: z.string().optional(),
-  Semester: z.string().optional(),
-  semester: z.string().optional(),
+  Semester: z.union([z.string(), z.number()]).optional(),
+  semester: z.union([z.string(), z.number()]).optional(),
 }).transform(data => ({
   // Map from various possible keys to a consistent format
   Day: data.Day || data.day,
@@ -25,12 +25,12 @@ const TimetableRowSchema = z.object({
   Semester: data.Semester || data.semester,
 })).pipe(z.object({
     // Now validate the consistent format
-    Day: z.string({ required_error: "CSV must include a 'Day' or 'day' column." }),
-    'Time Slot': z.string({ required_error: "CSV must include a 'Time Slot' or 'time_slot' column." }),
-    Subject: z.string({ required_error: "CSV must include a 'Subject' or 'subject' column." }),
+    Day: z.string({ required_error: "CSV must include a 'Day' or 'day' column." }).min(1, "Day cannot be empty."),
+    'Time Slot': z.string({ required_error: "CSV must include a 'Time Slot' or 'time_slot' column." }).min(1, "Time Slot cannot be empty."),
+    Subject: z.string({ required_error: "CSV must include a 'Subject' or 'subject' column." }).min(1, "Subject cannot be empty."),
     Faculty: z.string().optional().default(''), // Faculty can be optional
-    Course: z.string({ required_error: "CSV must include a 'Course' or 'course' column." }),
-    Semester: z.string().transform(val => parseInt(val, 10)),
+    Course: z.string({ required_error: "CSV must include a 'Course' or 'course' column." }).min(1, "Course cannot be empty."),
+    Semester: z.union([z.string(), z.number()]).transform(val => parseInt(String(val), 10)),
 }));
 
 
