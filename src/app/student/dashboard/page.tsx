@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 // No longer using mock data directly for timetable/events, will be fetched from Firestore
-import { getCurrentUser, mockRequests } from '@/data/mock-data'; 
+import { getCurrentUser } from '@/data/mock-data'; 
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
-import Link from 'link';
+import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, where, query, addDoc } from 'firebase/firestore';
 
