@@ -30,12 +30,15 @@ export default function AdminRequestLogsPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const requestsSnapshot = await getDocs(collection(db, "requests"));
+        const [requestsSnapshot, eventsSnapshot] = await Promise.all([
+          getDocs(collection(db, "requests")),
+          getDocs(collection(db, "events"))
+        ]);
+
         const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
                                      .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setRequests(requestsData);
 
-        const eventsSnapshot = await getDocs(collection(db, "events"));
         const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
         setEvents(eventsData);
       } catch (error) {

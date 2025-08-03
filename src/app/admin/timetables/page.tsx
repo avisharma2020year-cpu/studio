@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ const daysOfWeek: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', '
 
 export default function AdminTimetablesPage() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([]);
   const [facultyList, setFacultyList] = useState<{ id: string, name: string }[]>([]);
   
@@ -60,11 +61,14 @@ export default function AdminTimetablesPage() {
   const fetchTimetableData = async () => {
     setIsLoading(true);
     try {
-        const timetableSnapshot = await getDocs(collection(db, "timetables"));
+        const [timetableSnapshot, usersSnapshot] = await Promise.all([
+            getDocs(collection(db, "timetables")),
+            getDocs(collection(db, "users"))
+        ]);
+        
         const entries = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
         setTimetableEntries(entries);
         
-        const usersSnapshot = await getDocs(collection(db, "users"));
         const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
         setFacultyList(users.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
 
@@ -78,7 +82,7 @@ export default function AdminTimetablesPage() {
 
   useEffect(() => {
     fetchTimetableData();
-  }, [toast]);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -120,6 +124,7 @@ export default function AdminTimetablesPage() {
       return;
     }
 
+    setIsLoading(true);
     try {
         if (editingEntry) {
             const entryDocRef = doc(db, "timetables", editingEntry.id);
@@ -129,24 +134,29 @@ export default function AdminTimetablesPage() {
             await addDoc(collection(db, "timetables"), formData);
             toast({ title: "Success", description: "Timetable entry added successfully." });
         }
-        fetchTimetableData(); // Refresh data
+        await fetchTimetableData(); // Refresh data
         setIsFormOpen(false);
         setEditingEntry(null);
     } catch (error) {
         console.error("Error saving timetable entry:", error);
         toast({ title: "Error", description: "Could not save the entry.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
     }
   };
 
   const handleDeleteEntry = async (entryId: string) => {
      if (window.confirm("Are you sure you want to delete this timetable entry?")) {
+        setIsLoading(true);
         try {
             await deleteDoc(doc(db, "timetables", entryId));
             toast({ title: "Success", description: "Timetable entry deleted successfully." });
-            fetchTimetableData(); // Refresh data
+            await fetchTimetableData(); // Refresh data
         } catch (error) {
             console.error("Error deleting timetable entry:", error);
             toast({ title: "Error", description: "Could not delete the entry.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
         }
     }
   };
@@ -171,7 +181,6 @@ export default function AdminTimetablesPage() {
           
           const batch = writeBatch(db);
           newEntries.forEach((entry) => {
-            // Firestore will auto-generate an ID, so we don't need to pass `entry.id`
             const { id, ...entryData } = entry;
             const docRef = doc(collection(db, "timetables")); 
             batch.set(docRef, entryData);
@@ -179,7 +188,7 @@ export default function AdminTimetablesPage() {
           await batch.commit();
 
           toast({ title: "Success", description: `Timetable uploaded and ${newEntries.length} entries saved successfully.` });
-          fetchTimetableData(); // Refresh data from Firestore
+          await fetchTimetableData(); // Refresh data from Firestore
         } catch (error) {
           console.error("Error processing timetable:", error);
           let errorMessage = "Could not process the uploaded timetable file.";
@@ -189,8 +198,8 @@ export default function AdminTimetablesPage() {
           toast({ title: "Upload Failed", description: errorMessage, variant: "destructive" });
         } finally {
           setIsUploading(false);
-          if (event.target) {
-            event.target.value = "";
+          if(fileInputRef.current) {
+            fileInputRef.current.value = "";
           }
         }
       },
@@ -202,8 +211,8 @@ export default function AdminTimetablesPage() {
     });
   };
 
-  const uniqueCourses = ['all', ...new Set(timetableEntries.map(e => e.course))];
-  const uniqueSemesters = ['all', ...new Set(timetableEntries.map(e => e.semester.toString()))].sort();
+  const uniqueCourses = ['all', ...Array.from(new Set(timetableEntries.map(e => e.course)))];
+  const uniqueSemesters = ['all', ...Array.from(new Set(timetableEntries.map(e => e.semester.toString())))].sort();
 
 
   const filteredEntries = timetableEntries.filter(entry => 
@@ -221,11 +230,11 @@ export default function AdminTimetablesPage() {
             <CardDescription>Manage class schedules. Upload CSV or add entries manually.</CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => document.getElementById('fileUpload')?.click()} disabled={isUploading} className="hidden sm:flex">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="hidden sm:flex">
               {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
               {isUploading ? 'Uploading...' : 'Upload Timetable'}
             </Button>
-            <Input type="file" id="fileUpload" className="hidden" onChange={handleFileUpload} accept=".csv" disabled={isUploading} />
+            <Input ref={fileInputRef} type="file" id="fileUpload" className="hidden" onChange={handleFileUpload} accept=".csv" disabled={isUploading} />
             <Button onClick={openFormForNew} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Entry
             </Button>
@@ -233,7 +242,7 @@ export default function AdminTimetablesPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center">
-            <Button variant="outline" onClick={() => document.getElementById('fileUpload')?.click()} disabled={isUploading} className="flex sm:hidden w-full">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex sm:hidden w-full">
                 {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
                 {isUploading ? 'Uploading...' : 'Upload Timetable'}
             </Button>
@@ -315,7 +324,6 @@ export default function AdminTimetablesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            {/* Form fields: Day, Time Slot, Subject Name, Faculty Name (select from list), Course, Semester */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="day" className="text-right">Day</Label>
               <Select value={formData.day} onValueChange={(value) => handleSelectChange('day', value as TimetableEntry['day'])}>
@@ -357,7 +365,7 @@ export default function AdminTimetablesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90 text-primary-foreground">{editingEntry ? 'Save Changes' : 'Add Entry'}</Button>
+            <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>{isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (editingEntry ? 'Save Changes' : 'Add Entry')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

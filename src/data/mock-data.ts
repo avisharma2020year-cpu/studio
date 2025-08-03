@@ -11,19 +11,14 @@ export const mockUsers: User[] = [
   { id: 'user8', name: 'Dr. Disha Pathak', email: 'disha.p@example.com', role: 'faculty', subjects: ['Management Accounting', 'Management Accounting (S28)', 'Management Accounting (S29)', 'Management Accounting (S30)'] },
 ];
 
-// NOTE: mockTimetable, mockRequests, and mockEvents are now deprecated.
-// Data is now fetched from Firestore.
+// NOTE: The application now uses Firestore for all dynamic data.
+// These mock arrays are empty and deprecated.
+
 export const mockTimetable: TimetableEntry[] = [];
 export const mockRequests: MissedClassRequest[] = [];
 export const mockEvents: PreApprovedEvent[] = [];
+export const mockSubjectFacultyMappings: SubjectFacultyMapping[] = [];
 
-
-export const mockSubjectFacultyMappings: SubjectFacultyMapping[] = [
-  { subjectName: 'Data Structures', facultyId: 'user2', course: 'Computer Science', semester: 3 },
-  { subjectName: 'Algorithms', facultyId: 'user2', course: 'Computer Science', semester: 3 },
-  { subjectName: 'Database Management', facultyId: 'user5', course: 'Computer Science', semester: 3 },
-  { subjectName: 'Operating Systems', facultyId: 'user5', course: 'Computer Science', semester: 3 },
-];
 
 // Mock current user - in a real app, this would come from an auth context
 export const getCurrentUser = (role: 'student' | 'faculty' | 'admin'): User => {

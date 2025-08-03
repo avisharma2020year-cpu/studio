@@ -1,4 +1,4 @@
-# **App Name**: Missedit
+# **App Name**: Attendease
 
 ## Core Features:
 

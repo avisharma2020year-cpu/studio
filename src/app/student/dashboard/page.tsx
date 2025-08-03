@@ -7,7 +7,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// No longer using mock data directly for timetable/events, will be fetched from Firestore
 import { getCurrentUser } from '@/data/mock-data'; 
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
@@ -46,29 +45,29 @@ export default function StudentDashboardPage() {
   const [studentRequests, setStudentRequests] = useState<MissedClassRequest[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
+  const fetchStudentData = async () => {
         setIsLoading(true);
         try {
-            // Fetch Timetable from Firestore
             const timetableQuery = query(collection(db, "timetables"), 
               where("course", "==", currentUser.course), 
               where("semester", "==", currentUser.semester)
             );
-            const timetableSnapshot = await getDocs(timetableQuery);
-            const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+
+            const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
             
+            const [timetableSnapshot, eventsSnapshot, requestsSnapshot] = await Promise.all([
+                getDocs(timetableQuery),
+                getDocs(collection(db, "events")),
+                getDocs(requestsQuery),
+            ]);
+
+            const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
             setAllTimetableEntries(userTimetable);
             setTimetable(groupTimetableByDay(userTimetable));
 
-            // Fetch Events from Firestore
-            const eventsSnapshot = await getDocs(collection(db, "events"));
             const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
             setEvents(eventsData);
 
-            // Fetch student's previous requests
-            const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
-            const requestsSnapshot = await getDocs(requestsQuery);
             const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
                                      .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
             setStudentRequests(requestsData);
@@ -81,8 +80,9 @@ export default function StudentDashboardPage() {
         }
     };
 
-    fetchInitialData();
-  }, [currentUser.course, currentUser.semester, currentUser.id, toast]);
+  useEffect(() => {
+    fetchStudentData();
+  }, []);
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev => 
@@ -109,28 +109,33 @@ export default function StudentDashboardPage() {
     const requestsByFaculty = selectedClassDetails.reduce((acc, classDetail) => {
       const facultyId = classDetail.facultyId;
       if (!facultyId) return acc; 
-      if (!acc[facultyId]) acc[facultyId] = [];
-      acc[facultyId].push({
+      if (!acc[facultyId]) {
+        acc[facultyId] = {
+            facultyId: facultyId,
+            missedClasses: []
+        };
+      }
+      acc[facultyId].missedClasses.push({
         classId: classDetail.id,
         subjectName: classDetail.subjectName,
         timeSlot: classDetail.timeSlot,
         day: classDetail.day,
       });
       return acc;
-    }, {} as Record<string, MissedClassRequest['missedClasses']>);
+    }, {} as Record<string, { facultyId: string; missedClasses: MissedClassRequest['missedClasses'] }>);
 
     try {
-      const requestPromises = Object.entries(requestsByFaculty).map(([facultyId, missedClasses]) => {
+      const requestPromises = Object.values(requestsByFaculty).map((facultyRequest) => {
           const newRequestPayload = {
             studentId: currentUser.id,
             studentName: currentUser.name,
             studentPrn: currentUser.prn!,
-            missedClasses: missedClasses,
+            missedClasses: facultyRequest.missedClasses,
             reason,
             eventId: selectedEvent || '',
             timestamp: new Date().toISOString(),
             status: 'Pending' as const,
-            facultyId: facultyId,
+            facultyId: facultyRequest.facultyId,
             facultyComment: ''
           };
           return addDoc(collection(db, "requests"), newRequestPayload);
@@ -139,16 +144,12 @@ export default function StudentDashboardPage() {
       await Promise.all(requestPromises);
 
       toast({ title: "Success", description: `${requestPromises.length} absence request(s) submitted.` });
-      // Reset form state
+      
       setSelectedClasses([]);
       setReason('');
       setSelectedEvent(undefined);
-      // Refresh requests list
-      const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
-      const requestsSnapshot = await getDocs(requestsQuery);
-      const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
-                                     .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      setStudentRequests(requestsData);
+      
+      await fetchStudentData();
 
     } catch (error) {
        console.error("Error submitting request:", error);
@@ -201,7 +202,7 @@ export default function StudentDashboardPage() {
                     <CardTitle className="text-xl font-headline text-primary">{day}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {timetable[day].map(entry => (
+                    {timetable[day].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
                       <div key={entry.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm">
                         <Checkbox 
                           id={`class-${entry.id}`} 
@@ -298,9 +299,9 @@ export default function StudentDashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-muted-foreground text-center py-6">No requests submitted yet.</p>
+             <p className="text-muted-foreground text-center py-6">{isLoading ? 'Loading requests...' : 'No requests submitted yet.'}</p>
           )}
-          {studentRequests.length > 0 && ( // Always show if any requests exist for consistency
+          {studentRequests.length > 0 && (
             <Button variant="link" asChild className="mt-4 px-0 text-primary">
               <Link href="/student/my-requests">
                 View All My Requests &rarr;
@@ -312,5 +313,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    

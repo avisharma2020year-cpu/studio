@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentUser } from '@/data/mock-data';
-import type { MissedClassRequest, User, PreApprovedEvent } from '@/lib/types';
+import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -31,21 +31,18 @@ export default function FacultyDashboardPage() {
         setRequests([]);
         return;
       }
-      // This is a client-side filter. For large datasets, this should be optimized.
-      // We fetch all pending requests and filter them by the subjects this faculty teaches.
-      const requestsQuery = query(collection(db, "requests"), where("status", "==", "Pending"));
-      const requestsSnapshot = await getDocs(requestsQuery);
       
-      const allPendingRequests = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
-      
-      const facultyRequests = allPendingRequests.filter(req => 
-        req.missedClasses.some(mc => currentUser.subjects?.includes(mc.subjectName))
-      ).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const [requestsSnapshot, eventsSnapshot] = await Promise.all([
+          query(collection(db, "requests"), where("status", "==", "Pending"), where("facultyId", "==", currentUser.id)),
+          getDocs(collection(db, "events"))
+      ]);
+
+      const requestsDocs = await getDocs(requestsSnapshot);
+      const facultyRequests = requestsDocs.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+        .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
       setRequests(facultyRequests);
-
-      // Fetch events to display names
-      const eventsSnapshot = await getDocs(collection(db, "events"));
       setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
 
     } catch (error) {
@@ -58,7 +55,7 @@ export default function FacultyDashboardPage() {
   
   useEffect(() => {
     fetchFacultyData();
-  }, [currentUser.id, currentUser.subjects, toast]);
+  }, []);
 
   const handleUpdateRequestStatus = async (requestId: string, status: 'Approved' | 'Rejected') => {
     const comment = comments[requestId] || '';
@@ -66,7 +63,8 @@ export default function FacultyDashboardPage() {
       toast({ title: "Error", description: "Please provide a comment for rejection.", variant: "destructive" });
       return;
     }
-
+    
+    setIsLoading(true);
     try {
         const requestDocRef = doc(db, "requests", requestId);
         await updateDoc(requestDocRef, {
@@ -74,17 +72,14 @@ export default function FacultyDashboardPage() {
             facultyComment: comment,
         });
 
-        setRequests(prev => prev.filter(req => req.id !== requestId));
-        setComments(prev => {
-          const newComments = {...prev};
-          delete newComments[requestId];
-          return newComments;
-        });
-
         toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
+        await fetchFacultyData(); // Refresh list
+
     } catch (error) {
         console.error("Error updating request status:", error);
         toast({ title: "Error", description: "Failed to update request.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
     }
   };
   
@@ -148,10 +143,10 @@ export default function FacultyDashboardPage() {
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-3 pt-4 border-t mt-auto">
-                      <Button variant="outline" onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="text-red-600 border-red-500 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300">
+                      <Button variant="outline" onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="text-red-600 border-red-500 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300" disabled={isLoading}>
                         <X className="mr-2 h-4 w-4" /> Reject
                       </Button>
-                      <Button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-green-950">
+                      <Button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-green-950" disabled={isLoading}>
                         <Check className="mr-2 h-4 w-4" /> Approve
                       </Button>
                     </CardFooter>
