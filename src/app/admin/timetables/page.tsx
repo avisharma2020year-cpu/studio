@@ -22,8 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { mockUsers } from '@/data/mock-data';
-import type { TimetableEntry } from '@/lib/types';
+import type { TimetableEntry, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2 } from 'lucide-react';
 import Papa from 'papaparse';
@@ -58,17 +57,19 @@ export default function AdminTimetablesPage() {
   const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'>>(initialNewTimetableEntryState);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchTimetable = async () => {
+  const fetchTimetableData = async () => {
     setIsLoading(true);
     try {
         const timetableSnapshot = await getDocs(collection(db, "timetables"));
         const entries = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
         setTimetableEntries(entries);
         
-        // Use mockUsers for faculty list for now
-        setFacultyList(mockUsers.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
+        const usersSnapshot = await getDocs(collection(db, "users"));
+        const users = usersSnapshot.docs.map(doc => doc.data() as User);
+        setFacultyList(users.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
+
     } catch (error) {
-        console.error("Error fetching timetable:", error);
+        console.error("Error fetching data:", error);
         toast({ title: "Error", description: "Could not fetch timetable data.", variant: "destructive" });
     } finally {
         setIsLoading(false);
@@ -76,7 +77,7 @@ export default function AdminTimetablesPage() {
   };
 
   useEffect(() => {
-    fetchTimetable();
+    fetchTimetableData();
   }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,7 +129,7 @@ export default function AdminTimetablesPage() {
             await addDoc(collection(db, "timetables"), formData);
             toast({ title: "Success", description: "Timetable entry added successfully." });
         }
-        fetchTimetable(); // Refresh data
+        fetchTimetableData(); // Refresh data
         setIsFormOpen(false);
         setEditingEntry(null);
     } catch (error) {
@@ -142,7 +143,7 @@ export default function AdminTimetablesPage() {
         try {
             await deleteDoc(doc(db, "timetables", entryId));
             toast({ title: "Success", description: "Timetable entry deleted successfully." });
-            fetchTimetable(); // Refresh data
+            fetchTimetableData(); // Refresh data
         } catch (error) {
             console.error("Error deleting timetable entry:", error);
             toast({ title: "Error", description: "Could not delete the entry.", variant: "destructive" });
@@ -178,7 +179,7 @@ export default function AdminTimetablesPage() {
           await batch.commit();
 
           toast({ title: "Success", description: `Timetable uploaded and ${newEntries.length} entries saved successfully.` });
-          fetchTimetable(); // Refresh data from Firestore
+          fetchTimetableData(); // Refresh data from Firestore
         } catch (error) {
           console.error("Error processing timetable:", error);
           let errorMessage = "Could not process the uploaded timetable file.";
