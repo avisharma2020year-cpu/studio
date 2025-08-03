@@ -20,13 +20,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { mockUsers } from '@/data/mock-data';
 import type { User, UserRole } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit2, Trash2, Search, Users, Filter } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Search, Users, Filter, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+
 
 const initialNewUserState: Omit<User, 'id'> = {
   name: '',
@@ -41,15 +42,30 @@ const initialNewUserState: Omit<User, 'id'> = {
 export default function AdminUsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<Omit<User, 'id'>>(initialNewUserState);
 
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+        const usersSnapshot = await getDocs(collection(db, "users"));
+        const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        setUsers(usersData);
+    } catch (error) {
+        console.error("Error fetching users:", error);
+        toast({ title: "Error", description: "Could not fetch users data.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+  
   useEffect(() => {
-    setUsers(mockUsers); // Load initial mock data
-  }, []);
+    fetchUsers();
+  }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -84,38 +100,40 @@ export default function AdminUsersPage() {
     setIsFormOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.email) {
       toast({ title: "Error", description: "Name and Email are required.", variant: "destructive" });
       return;
     }
 
-    if (editingUser) {
-      // Update user
-      const updatedUsers = users.map(u => u.id === editingUser.id ? { ...editingUser, ...formData } : u);
-      setUsers(updatedUsers);
-      // Update mockUsers array as well for persistence in this demo
-      const mockIndex = mockUsers.findIndex(u => u.id === editingUser.id);
-      if (mockIndex !== -1) mockUsers[mockIndex] = { ...editingUser, ...formData };
-      toast({ title: "Success", description: "User updated successfully." });
-    } else {
-      // Add new user
-      const newUser: User = { id: `user${Date.now()}`, ...formData };
-      setUsers(prev => [...prev, newUser]);
-      mockUsers.push(newUser); // Add to mockUsers for persistence in this demo
-      toast({ title: "Success", description: "User added successfully." });
+    try {
+        if (editingUser) {
+            const userDocRef = doc(db, "users", editingUser.id);
+            await updateDoc(userDocRef, formData);
+            toast({ title: "Success", description: "User updated successfully." });
+        } else {
+            await addDoc(collection(db, "users"), formData);
+            toast({ title: "Success", description: "User added successfully." });
+        }
+        fetchUsers();
+        setIsFormOpen(false);
+        setEditingUser(null);
+    } catch (error) {
+        console.error("Error saving user:", error);
+        toast({ title: "Error", description: "Could not save the user.", variant: "destructive" });
     }
-    setIsFormOpen(false);
-    setEditingUser(null);
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     if (window.confirm("Are you sure you want to delete this user?")) {
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      // Remove from mockUsers as well
-      const mockIndex = mockUsers.findIndex(u => u.id === userId);
-      if (mockIndex !== -1) mockUsers.splice(mockIndex, 1);
-      toast({ title: "Success", description: "User deleted successfully." });
+      try {
+        await deleteDoc(doc(db, "users", userId));
+        toast({ title: "Success", description: "User deleted successfully." });
+        fetchUsers();
+      } catch (error) {
+        console.error("Error deleting user:", error);
+        toast({ title: "Error", description: "Could not delete the user.", variant: "destructive" });
+      }
     }
   };
 
@@ -156,7 +174,7 @@ export default function AdminUsersPage() {
                 className="pl-10"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Filter className="h-4 w-4 text-muted-foreground" />
               <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as UserRole | 'all')}>
                 <SelectTrigger className="w-full sm:w-[180px]">
@@ -172,7 +190,11 @@ export default function AdminUsersPage() {
             </div>
           </div>
 
-          {filteredUsers.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            </div>
+          ) : filteredUsers.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -211,7 +233,7 @@ export default function AdminUsersPage() {
               </Table>
             </div>
           ) : (
-             <p className="text-center text-muted-foreground py-8">No users found matching your criteria.</p>
+             <p className="text-center text-muted-foreground py-8">No users found. Add one to get started.</p>
           )}
         </CardContent>
       </Card>
