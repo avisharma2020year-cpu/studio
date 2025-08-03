@@ -1,11 +1,12 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { mockRequests, getCurrentUser, mockEvents } from '@/data/mock-data';
-import type { MissedClassRequest } from '@/lib/types';
+import { getCurrentUser } from '@/data/mock-data';
+import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Clock, ListFilter, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, ListFilter, FileText, Loader2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -15,15 +16,37 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function MyRequestsPage() {
   const currentUser = getCurrentUser('student');
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
+  const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
 
   useEffect(() => {
-    const userRequests = mockRequests.filter(req => req.studentId === currentUser.id);
-    setRequests(userRequests.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    const fetchData = async () => {
+      setIsLoading(true);
+      if (!currentUser?.id) return;
+      try {
+        const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
+        const requestsSnapshot = await getDocs(requestsQuery);
+        const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+                                      .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setRequests(requestsData);
+
+        const eventsSnapshot = await getDocs(collection(db, "events"));
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
+        setEvents(eventsData);
+      } catch (error) {
+        console.error("Error fetching requests:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchData();
   }, [currentUser.id]);
 
   const filteredRequests = requests.filter(req => {
@@ -41,18 +64,17 @@ export default function MyRequestsPage() {
   };
   
   const getStatusBadgeVariant = (status: MissedClassRequest['status']): "default" | "secondary" | "destructive" | "outline" => {
-    // Customize these to better match theme if primary is too strong for 'Approved'
     switch (status) {
-      case 'Approved': return 'default'; // Uses primary, can be changed to a custom "success" variant
+      case 'Approved': return 'default';
       case 'Rejected': return 'destructive';
-      case 'Pending': return 'secondary'; // Uses secondary, often a grey or muted color
+      case 'Pending': return 'secondary'; 
       default: return 'outline';
     }
   };
 
   const getEventName = (eventId?: string) => {
     if (!eventId) return 'N/A';
-    return mockEvents.find(e => e.id === eventId)?.name || 'Unknown Event';
+    return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   }
 
 
@@ -79,8 +101,12 @@ export default function MyRequestsPage() {
               </Button>
             ))}
           </div>
-
-          {filteredRequests.length > 0 ? (
+          
+          {isLoading ? (
+             <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             </div>
+          ) : filteredRequests.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>

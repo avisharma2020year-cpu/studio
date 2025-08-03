@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect, ChangeEvent } from 'react';
 import { Button } from "@/components/ui/button";
@@ -21,12 +22,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { mockTimetable, mockUsers } from '@/data/mock-data';
+import { mockUsers } from '@/data/mock-data';
 import type { TimetableEntry } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2 } from 'lucide-react';
 import Papa from 'papaparse';
 import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 
 
 const initialNewTimetableEntryState: Omit<TimetableEntry, 'id'> = {
@@ -53,12 +56,28 @@ export default function AdminTimetablesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimetableEntry | null>(null);
   const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'>>(initialNewTimetableEntryState);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchTimetable = async () => {
+    setIsLoading(true);
+    try {
+        const timetableSnapshot = await getDocs(collection(db, "timetables"));
+        const entries = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+        setTimetableEntries(entries);
+        
+        // Use mockUsers for faculty list for now
+        setFacultyList(mockUsers.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
+    } catch (error) {
+        console.error("Error fetching timetable:", error);
+        toast({ title: "Error", description: "Could not fetch timetable data.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Replace with Firestore fetching logic
-    setTimetableEntries(mockTimetable); 
-    setFacultyList(mockUsers.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
-  }, []);
+    fetchTimetable();
+  }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -94,36 +113,40 @@ export default function AdminTimetablesPage() {
     setIsFormOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.day || !formData.timeSlot || !formData.subjectName || !formData.facultyId || !formData.course || !formData.semester) {
       toast({ title: "Error", description: "All fields are required.", variant: "destructive" });
       return;
     }
 
-    // Replace with Firestore save logic
-    if (editingEntry) {
-      const updatedEntries = timetableEntries.map(e => e.id === editingEntry.id ? { ...editingEntry, ...formData } : e);
-      setTimetableEntries(updatedEntries);
-      const mockIndex = mockTimetable.findIndex(e => e.id === editingEntry.id);
-      if (mockIndex !== -1) mockTimetable[mockIndex] = { ...editingEntry, ...formData };
-      toast({ title: "Success", description: "Timetable entry updated successfully." });
-    } else {
-      const newEntry: TimetableEntry = { id: `tt${Date.now()}`, ...formData };
-      setTimetableEntries(prev => [...prev, newEntry]);
-      mockTimetable.push(newEntry);
-      toast({ title: "Success", description: "Timetable entry added successfully." });
+    try {
+        if (editingEntry) {
+            const entryDocRef = doc(db, "timetables", editingEntry.id);
+            await updateDoc(entryDocRef, formData);
+            toast({ title: "Success", description: "Timetable entry updated successfully." });
+        } else {
+            await addDoc(collection(db, "timetables"), formData);
+            toast({ title: "Success", description: "Timetable entry added successfully." });
+        }
+        fetchTimetable(); // Refresh data
+        setIsFormOpen(false);
+        setEditingEntry(null);
+    } catch (error) {
+        console.error("Error saving timetable entry:", error);
+        toast({ title: "Error", description: "Could not save the entry.", variant: "destructive" });
     }
-    setIsFormOpen(false);
-    setEditingEntry(null);
   };
 
-  const handleDeleteEntry = (entryId: string) => {
+  const handleDeleteEntry = async (entryId: string) => {
      if (window.confirm("Are you sure you want to delete this timetable entry?")) {
-      // Replace with Firestore delete logic
-      setTimetableEntries(prev => prev.filter(e => e.id !== entryId));
-      const mockIndex = mockTimetable.findIndex(e => e.id === entryId);
-      if (mockIndex !== -1) mockTimetable.splice(mockIndex, 1);
-      toast({ title: "Success", description: "Timetable entry deleted successfully." });
+        try {
+            await deleteDoc(doc(db, "timetables", entryId));
+            toast({ title: "Success", description: "Timetable entry deleted successfully." });
+            fetchTimetable(); // Refresh data
+        } catch (error) {
+            console.error("Error deleting timetable entry:", error);
+            toast({ title: "Error", description: "Could not delete the entry.", variant: "destructive" });
+        }
     }
   };
   
@@ -144,10 +167,18 @@ export default function AdminTimetablesPage() {
       complete: async (results) => {
         try {
           const newEntries = await uploadTimetable(results.data);
-          // Here, you would write `newEntries` to Firestore.
-          // For now, we update the local state to show the changes.
-          setTimetableEntries(newEntries);
-          toast({ title: "Success", description: "Timetable uploaded and processed successfully." });
+          
+          const batch = writeBatch(db);
+          newEntries.forEach((entry) => {
+            // Firestore will auto-generate an ID, so we don't need to pass `entry.id`
+            const { id, ...entryData } = entry;
+            const docRef = doc(collection(db, "timetables")); 
+            batch.set(docRef, entryData);
+          });
+          await batch.commit();
+
+          toast({ title: "Success", description: `Timetable uploaded and ${newEntries.length} entries saved successfully.` });
+          fetchTimetable(); // Refresh data from Firestore
         } catch (error) {
           console.error("Error processing timetable:", error);
           let errorMessage = "Could not process the uploaded timetable file.";
@@ -228,7 +259,11 @@ export default function AdminTimetablesPage() {
             </div>
           </div>
         
-          {filteredEntries.length > 0 ? (
+           {isLoading ? (
+             <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             </div>
+          ) : filteredEntries.length > 0 ? (
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>

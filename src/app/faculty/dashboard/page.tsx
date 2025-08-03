@@ -1,65 +1,98 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { mockRequests, mockUsers, getCurrentUser, mockEvents } from '@/data/mock-data';
-import type { MissedClassRequest, User } from '@/lib/types';
+import { getCurrentUser } from '@/data/mock-data';
+import type { MissedClassRequest, User, PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox } from 'lucide-react';
+import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 
 
 export default function FacultyDashboardPage() {
   const { toast } = useToast();
-  const currentUser = getCurrentUser('faculty'); // Mock current user
+  const currentUser = getCurrentUser('faculty'); 
 
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
   const [comments, setComments] = useState<Record<string, string>>({}); // { requestId: comment }
+  const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
+  const fetchFacultyData = async () => {
+    setIsLoading(true);
+    try {
+      if (!currentUser || !currentUser.subjects || currentUser.subjects.length === 0) {
+        setRequests([]);
+        return;
+      }
+      // This is a client-side filter. For large datasets, this should be optimized.
+      // We fetch all pending requests and filter them by the subjects this faculty teaches.
+      const requestsQuery = query(collection(db, "requests"), where("status", "==", "Pending"));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      
+      const allPendingRequests = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+      
+      const facultyRequests = allPendingRequests.filter(req => 
+        req.missedClasses.some(mc => currentUser.subjects?.includes(mc.subjectName))
+      ).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      setRequests(facultyRequests);
+
+      // Fetch events to display names
+      const eventsSnapshot = await getDocs(collection(db, "events"));
+      setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+
+    } catch (error) {
+      console.error("Error fetching faculty requests:", error);
+      toast({ title: "Error", description: "Could not load requests.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   useEffect(() => {
-    // Simulate fetching requests relevant to this faculty member
-    // This logic needs to be robust: check facultyId on request, or match subject with faculty's subjects
-    const facultyRequests = mockRequests.filter(req => 
-      req.status === 'Pending' && 
-      (req.facultyId === currentUser.id || 
-       req.missedClasses.some(mc => currentUser.subjects?.includes(mc.subjectName)))
-    ).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()); // older first for processing
-    setRequests(facultyRequests);
-  }, [currentUser.id, currentUser.subjects]);
+    fetchFacultyData();
+  }, [currentUser.id, currentUser.subjects, toast]);
 
-  const handleUpdateRequestStatus = (requestId: string, status: 'Approved' | 'Rejected') => {
+  const handleUpdateRequestStatus = async (requestId: string, status: 'Approved' | 'Rejected') => {
     const comment = comments[requestId] || '';
     if (status === 'Rejected' && !comment.trim()) {
       toast({ title: "Error", description: "Please provide a comment for rejection.", variant: "destructive" });
       return;
     }
 
-    // Simulate API call
-    console.log(`Updating request ${requestId} to ${status} with comment: "${comment}"`);
-    
-    // Update mock data (in real app, this would be a server action and re-fetch)
-    const requestIndex = mockRequests.findIndex(r => r.id === requestId);
-    if (requestIndex !== -1) {
-      mockRequests[requestIndex].status = status;
-      mockRequests[requestIndex].facultyComment = comment;
+    try {
+        const requestDocRef = doc(db, "requests", requestId);
+        await updateDoc(requestDocRef, {
+            status: status,
+            facultyComment: comment,
+        });
+
+        setRequests(prev => prev.filter(req => req.id !== requestId));
+        setComments(prev => {
+          const newComments = {...prev};
+          delete newComments[requestId];
+          return newComments;
+        });
+
+        toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
+    } catch (error) {
+        console.error("Error updating request status:", error);
+        toast({ title: "Error", description: "Failed to update request.", variant: "destructive" });
     }
-    
-    setRequests(prev => prev.filter(req => req.id !== requestId));
-    setComments(prev => {
-      const newComments = {...prev};
-      delete newComments[requestId];
-      return newComments;
-    });
-
-    toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
   };
+  
+   const getEventName = (eventId?: string) => {
+    if (!eventId) return 'N/A';
+    return events.find(e => e.id === eventId)?.name || 'Unknown Event';
+  }
 
-  const getStudentDetails = (studentId: string): User | undefined => {
-    return mockUsers.find(user => user.id === studentId);
-  };
 
   return (
     <div className="space-y-8">
@@ -69,10 +102,13 @@ export default function FacultyDashboardPage() {
           <CardDescription>Review pending absence requests from students for your subjects.</CardDescription>
         </CardHeader>
         <CardContent>
-          {requests.length > 0 ? (
+          {isLoading ? (
+             <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             </div>
+          ) : requests.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {requests.map(req => {
-                // const student = getStudentDetails(req.studentId); // Not used directly, studentName on request
                 return (
                   <Card key={req.id} className="flex flex-col bg-muted/20 shadow-md rounded-lg">
                     <CardHeader>
@@ -97,7 +133,7 @@ export default function FacultyDashboardPage() {
                       {req.eventId && (
                         <div>
                           <h4 className="font-semibold text-sm mb-1">Pre-approved Event:</h4>
-                           <Badge variant="secondary" className="text-sm">{mockEvents.find(e => e.id === req.eventId)?.name || 'Unknown Event'}</Badge>
+                           <Badge variant="secondary" className="text-sm">{getEventName(req.eventId)}</Badge>
                         </div>
                       )}
                       <div className="pt-2">

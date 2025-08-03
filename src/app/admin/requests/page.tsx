@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,21 +12,39 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { mockRequests, mockEvents } from '@/data/mock-data';
-import type { MissedClassRequest, RequestStatus } from '@/lib/types';
+import type { MissedClassRequest, PreApprovedEvent, RequestStatus } from '@/lib/types';
 import { Badge } from "@/components/ui/badge";
-import { ListChecks, Search, Filter, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { ListChecks, Search, Filter, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 export default function AdminRequestLogsPage() {
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
+  const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
-  // Add more filters if needed: student name, faculty name, date range etc.
 
   useEffect(() => {
-    // Sort by most recent first
-    setRequests(mockRequests.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const requestsSnapshot = await getDocs(collection(db, "requests"));
+        const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+                                     .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setRequests(requestsData);
+
+        const eventsSnapshot = await getDocs(collection(db, "events"));
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
+        setEvents(eventsData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const filteredRequests = requests.filter(req => {
@@ -57,7 +76,7 @@ export default function AdminRequestLogsPage() {
   
   const getEventName = (eventId?: string) => {
     if (!eventId) return 'N/A';
-    return mockEvents.find(e => e.id === eventId)?.name || 'Unknown Event';
+    return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   }
 
   return (
@@ -92,10 +111,13 @@ export default function AdminRequestLogsPage() {
                 </SelectContent>
               </Select>
             </div>
-            {/* Add more filters here, e.g., DateRangePicker */}
           </div>
 
-          {filteredRequests.length > 0 ? (
+          {isLoading ? (
+             <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             </div>
+          ) : filteredRequests.length > 0 ? (
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>

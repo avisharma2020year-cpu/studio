@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -21,10 +22,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { mockEvents } from '@/data/mock-data';
 import type { PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit2, Trash2, CalendarPlus } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, CalendarPlus, Loader2 } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const initialNewEventState: Omit<PreApprovedEvent, 'id'> = {
   name: '',
@@ -34,13 +36,28 @@ const initialNewEventState: Omit<PreApprovedEvent, 'id'> = {
 export default function AdminEventsPage() {
   const { toast } = useToast();
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PreApprovedEvent | null>(null);
   const [formData, setFormData] = useState<Omit<PreApprovedEvent, 'id'>>(initialNewEventState);
+  
+  const fetchEvents = async () => {
+    setIsLoading(true);
+    try {
+        const eventsSnapshot = await getDocs(collection(db, "events"));
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
+        setEvents(eventsData);
+    } catch (error) {
+        console.error("Error fetching events:", error);
+        toast({ title: "Error", description: "Could not fetch events data.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setEvents(mockEvents); // Load initial mock data
-  }, []);
+    fetchEvents();
+  }, [toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -62,34 +79,40 @@ export default function AdminEventsPage() {
     setIsFormOpen(true);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.description) {
       toast({ title: "Error", description: "Event Name and Description are required.", variant: "destructive" });
       return;
     }
 
-    if (editingEvent) {
-      const updatedEvents = events.map(e => e.id === editingEvent.id ? { ...editingEvent, ...formData } : e);
-      setEvents(updatedEvents);
-      const mockIndex = mockEvents.findIndex(e => e.id === editingEvent.id);
-      if (mockIndex !== -1) mockEvents[mockIndex] = { ...editingEvent, ...formData };
-      toast({ title: "Success", description: "Event updated successfully." });
-    } else {
-      const newEvent: PreApprovedEvent = { id: `event${Date.now()}`, ...formData };
-      setEvents(prev => [...prev, newEvent]);
-      mockEvents.push(newEvent);
-      toast({ title: "Success", description: "Event added successfully." });
+    try {
+        if (editingEvent) {
+            const eventDocRef = doc(db, "events", editingEvent.id);
+            await updateDoc(eventDocRef, formData);
+            toast({ title: "Success", description: "Event updated successfully." });
+        } else {
+            await addDoc(collection(db, "events"), formData);
+            toast({ title: "Success", description: "Event added successfully." });
+        }
+        fetchEvents();
+        setIsFormOpen(false);
+        setEditingEvent(null);
+    } catch (error) {
+        console.error("Error saving event:", error);
+        toast({ title: "Error", description: "Could not save the event.", variant: "destructive" });
     }
-    setIsFormOpen(false);
-    setEditingEvent(null);
   };
 
-  const handleDeleteEvent = (eventId: string) => {
+  const handleDeleteEvent = async (eventId: string) => {
      if (window.confirm("Are you sure you want to delete this event?")) {
-      setEvents(prev => prev.filter(e => e.id !== eventId));
-      const mockIndex = mockEvents.findIndex(e => e.id === eventId);
-      if (mockIndex !== -1) mockEvents.splice(mockIndex, 1);
-      toast({ title: "Success", description: "Event deleted successfully." });
+      try {
+        await deleteDoc(doc(db, "events", eventId));
+        toast({ title: "Success", description: "Event deleted successfully." });
+        fetchEvents();
+      } catch (error) {
+        console.error("Error deleting event:", error);
+        toast({ title: "Error", description: "Could not delete the event.", variant: "destructive" });
+      }
     }
   };
 
@@ -106,7 +129,11 @@ export default function AdminEventsPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          {events.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            </div>
+          ) : events.length > 0 ? (
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
