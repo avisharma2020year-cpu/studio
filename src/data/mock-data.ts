@@ -66,7 +66,14 @@ export const mockSubjectFacultyMappings: SubjectFacultyMapping[] = [
 // Mock current user - in a real app, this would come from an auth context
 export const getCurrentUser = (role: 'student' | 'faculty' | 'admin'): User => {
   if (role === 'student') return mockUsers.find(u => u.prn === 'S1001')!;
-  if (role === 'faculty') return mockUsers.find(u => u.role === 'faculty')!;
+  if (role === 'faculty') return mockUsers.find(u => u.role === 'faculty' && u.id === 'user6')!; // Default to a specific faculty
   if (role === 'admin') return mockUsers.find(u => u.role === 'admin')!;
+  
+  // Find a default faculty, or fallback to the first one.
+  let facultyUser = mockUsers.find(u => u.role === 'faculty');
+  if (role === 'faculty') return facultyUser || mockUsers[1];
+
   return mockUsers[0]; // Default
 };
+
+    

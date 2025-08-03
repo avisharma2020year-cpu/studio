@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export default function StudentDashboardPage() {
   useEffect(() => {
     // Simulate fetching data
     const userTimetable = mockTimetable.filter(
-      entry => entry.course === currentUser.course && entry.semester === currentUser.semester
+      entry => entry.course.toLowerCase() === currentUser.course?.toLowerCase() && entry.semester === currentUser.semester
     );
     setTimetable(groupTimetableByDay(userTimetable));
     setEvents(mockEvents);
@@ -68,7 +69,12 @@ export default function StudentDashboardPage() {
     const allTimetableEntries = Object.values(timetable).flat();
     const selectedClassDetails = selectedClasses.map(classId => {
       const entry = allTimetableEntries.find(cls => cls.id === classId);
-      if (!entry) throw new Error(`Class with id ${classId} not found in timetable`);
+      if (!entry) {
+        // Fallback to searching the global mockTimetable if not found in component state
+        const globalEntry = mockTimetable.find(cls => cls.id === classId);
+        if (globalEntry) return globalEntry;
+        throw new Error(`Class with id ${classId} not found in timetable`);
+      }
       return entry;
     });
 
@@ -265,3 +271,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    
