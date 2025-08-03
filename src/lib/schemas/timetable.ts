@@ -1,45 +1,55 @@
 
 import { z } from 'zod';
-import type { TimetableEntry } from '@/lib/types';
 
-// Stricter schema to handle CSV header variations and data types
+const daysEnum = z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
+
+// Base schema for a single, validated row.
 const TimetableRowSchema = z.object({
-    Day: z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
-    'Time Slot': z.string().min(1, "Time Slot cannot be empty."),
-    Subject: z.string().min(1, "Subject cannot be empty."),
-    Faculty: z.string().optional().default(''),
-    Course: z.string().min(1, "Course cannot be empty."),
-    Semester: z.coerce.number({ invalid_type_error: "Semester must be a number." }),
-  });
-  
+  Day: daysEnum,
+  'Time Slot': z.string().min(1),
+  Subject: z.string().min(1),
+  Faculty: z.string().default(''),
+  Course: z.string().min(1),
+  Semester: z.coerce.number(),
+});
+
 // This transform normalizes various possible header names from the CSV
-// into the strict format defined by TimetableRowSchema.
-const FlexibleTimetableRowSchema = z.any().transform((arg, ctx) => {
+// and validates the row. If validation fails, it returns null.
+const FlexibleTimetableRowSchema = z.any().transform((arg) => {
     if (typeof arg !== 'object' || arg === null) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.invalid_type,
-            expected: 'object',
-            received: typeof arg,
-        });
-        return z.NEVER;
+        return null; // Skip non-object rows
     }
     const data = arg as Record<string, unknown>;
+
+    // Normalize keys: maps possible CSV headers to the strict schema headers.
     const normalized = {
       Day: data.Day || data.day,
-      'Time Slot': data['Time Slot'] || data['time_slot'] || data.TimeSlot,
+      'Time Slot': data['Time Slot'] || data.timeSlot || data.timeslot || data.time_slot,
       Subject: data.Subject || data.subject,
-      Faculty: data.Faculty || data.facultyName || data.faculty_name,
+      Faculty: data.Faculty || data.faculty,
       Course: data.Course || data.course,
       Semester: data.Semester || data.semester,
     };
-    return TimetableRowSchema.parse(normalized);
+
+    const result = TimetableRowSchema.safeParse(normalized);
+
+    if (result.success) {
+        return result.data;
+    } else {
+        // Log errors for debugging if needed, but return null to skip the row.
+        console.warn('Skipping invalid row:', result.error.flatten().fieldErrors);
+        return null;
+    }
 });
 
-
-// The input to our flow will be an array of these rows
+// The input to our flow will be an array of potentially mixed-quality rows.
 export const TimetableUploadInputSchema = z.array(FlexibleTimetableRowSchema);
 export type TimetableUploadInput = z.infer<typeof TimetableUploadInputSchema>;
 
-// The output will be a structured array of TimetableEntry objects
-export const TimetableUploadOutputSchema = z.array(z.custom<TimetableEntry>());
+
+// The output will be a structured array of valid TimetableEntry objects and a count of skipped rows.
+export const TimetableUploadOutputSchema = z.object({
+  timetable: z.array(z.any()), // array of valid timetable entries
+  skipped: z.number(),         // count of skipped rows
+});
 export type TimetableUploadOutput = z.infer<typeof TimetableUploadOutputSchema>;

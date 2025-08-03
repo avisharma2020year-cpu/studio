@@ -173,9 +173,14 @@ export default function AdminTimetablesPage() {
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const newEntries = await uploadTimetable(results.data);
+          const { timetable: newEntries, skipped } = await uploadTimetable(results.data);
+          
           if (newEntries.length === 0) {
-            toast({ title: "Upload Info", description: "No new valid entries were found to add.", variant: "destructive" });
+            toast({ 
+              title: "Upload Complete", 
+              description: `No new valid entries were found to add. ${skipped > 0 ? `${skipped} rows were skipped due to missing or invalid data.` : ''}`, 
+              variant: "destructive" 
+            });
             return;
           }
           
@@ -187,8 +192,12 @@ export default function AdminTimetablesPage() {
           });
           await batch.commit();
 
-          toast({ title: "Success", description: `Timetable uploaded and ${newEntries.length} entries saved successfully.` });
-          await fetchTimetableData(); // Refresh data from Firestore
+          let description = `Timetable uploaded and ${newEntries.length} entries saved successfully.`;
+          if (skipped > 0) {
+            description += ` ${skipped} rows were skipped.`;
+          }
+          toast({ title: "Success", description });
+          await fetchTimetableData();
         } catch (error) {
           console.error("Error processing timetable:", error);
           let errorMessage = "Could not process the uploaded timetable file.";
