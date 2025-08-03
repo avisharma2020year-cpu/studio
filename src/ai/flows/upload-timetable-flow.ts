@@ -26,6 +26,7 @@ const uploadTimetableFlow = ai.defineFlow(
     console.log('Processing uploaded timetable data:', rows);
 
     // In a real application, you might fetch faculty from a database
+    // For now, we continue to use mock data for faculty mapping during upload
     const facultyMap = new Map(mockUsers.filter(u => u.role === 'faculty').map(u => [u.name, u.id]));
 
     const newTimetable: TimetableEntry[] = rows.map((row, index) => {

@@ -55,7 +55,8 @@ export default function AdminTimetablesPage() {
   const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'>>(initialNewTimetableEntryState);
 
   useEffect(() => {
-    setTimetableEntries(mockTimetable); // Load initial mock data
+    // Replace with Firestore fetching logic
+    setTimetableEntries(mockTimetable); 
     setFacultyList(mockUsers.filter(u => u.role === 'faculty').map(f => ({ id: f.id, name: f.name })));
   }, []);
 
@@ -99,6 +100,7 @@ export default function AdminTimetablesPage() {
       return;
     }
 
+    // Replace with Firestore save logic
     if (editingEntry) {
       const updatedEntries = timetableEntries.map(e => e.id === editingEntry.id ? { ...editingEntry, ...formData } : e);
       setTimetableEntries(updatedEntries);
@@ -116,7 +118,8 @@ export default function AdminTimetablesPage() {
   };
 
   const handleDeleteEntry = (entryId: string) => {
-    if (window.confirm("Are you sure you want to delete this timetable entry?")) {
+     if (window.confirm("Are you sure you want to delete this timetable entry?")) {
+      // Replace with Firestore delete logic
       setTimetableEntries(prev => prev.filter(e => e.id !== entryId));
       const mockIndex = mockTimetable.findIndex(e => e.id === entryId);
       if (mockIndex !== -1) mockTimetable.splice(mockIndex, 1);
@@ -141,16 +144,19 @@ export default function AdminTimetablesPage() {
       complete: async (results) => {
         try {
           const newEntries = await uploadTimetable(results.data);
-          // In a real app, you would replace the mock data logic with a proper state management solution
-          mockTimetable.splice(0, mockTimetable.length, ...newEntries);
+          // Here, you would write `newEntries` to Firestore.
+          // For now, we update the local state to show the changes.
           setTimetableEntries(newEntries);
           toast({ title: "Success", description: "Timetable uploaded and processed successfully." });
         } catch (error) {
           console.error("Error processing timetable:", error);
-          toast({ title: "Upload Failed", description: "Could not process the uploaded timetable file.", variant: "destructive" });
+          let errorMessage = "Could not process the uploaded timetable file.";
+          if (error instanceof Error) {
+              errorMessage = error.message;
+          }
+          toast({ title: "Upload Failed", description: errorMessage, variant: "destructive" });
         } finally {
           setIsUploading(false);
-          // Reset file input to allow re-uploading the same file
           if (event.target) {
             event.target.value = "";
           }

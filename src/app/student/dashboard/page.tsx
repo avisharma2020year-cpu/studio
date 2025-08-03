@@ -7,11 +7,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockTimetable, mockEvents, getCurrentUser, mockRequests } from '@/data/mock-data';
+// No longer using mock data directly for timetable/events, will be fetched from Firestore
+import { getCurrentUser, mockRequests } from '@/data/mock-data'; 
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle } from 'lucide-react';
-import Link from 'next/link';
+import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
+import Link from 'link';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, where, query, addDoc } from 'firebase/firestore';
+
 
 // Helper to group timetable by day
 const groupTimetableByDay = (timetable: TimetableEntry[]) => {
@@ -30,25 +34,55 @@ const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'T
 
 export default function StudentDashboardPage() {
   const { toast } = useToast();
-  const currentUser = getCurrentUser('student'); // Mock current user
+  const currentUser = getCurrentUser('student'); 
 
+  const [isLoading, setIsLoading] = useState(true);
   const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
+  const [allTimetableEntries, setAllTimetableEntries] = useState<TimetableEntry[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<string | undefined>(undefined);
   const [studentRequests, setStudentRequests] = useState<MissedClassRequest[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Simulate fetching data
-    const userTimetable = mockTimetable.filter(
-      entry => entry.course.toLowerCase() === currentUser.course?.toLowerCase() && entry.semester === currentUser.semester
-    );
-    setTimetable(groupTimetableByDay(userTimetable));
-    setEvents(mockEvents);
-    // Sort by most recent first
-    setStudentRequests(mockRequests.filter(req => req.studentId === currentUser.id).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-  }, [currentUser.course, currentUser.semester, currentUser.id]);
+    const fetchInitialData = async () => {
+        setIsLoading(true);
+        try {
+            // Fetch Timetable from Firestore
+            const timetableQuery = query(collection(db, "timetables"), 
+              where("course", "==", currentUser.course), 
+              where("semester", "==", currentUser.semester)
+            );
+            const timetableSnapshot = await getDocs(timetableQuery);
+            const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+            
+            setAllTimetableEntries(userTimetable);
+            setTimetable(groupTimetableByDay(userTimetable));
+
+            // Fetch Events from Firestore
+            const eventsSnapshot = await getDocs(collection(db, "events"));
+            const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent));
+            setEvents(eventsData);
+
+            // Fetch student's previous requests
+            const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
+            const requestsSnapshot = await getDocs(requestsQuery);
+            const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+                                     .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            setStudentRequests(requestsData);
+
+        } catch (error) {
+            console.error("Error fetching data from Firestore:", error);
+            toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    fetchInitialData();
+  }, [currentUser.course, currentUser.semester, currentUser.id, toast]);
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev => 
@@ -56,7 +90,7 @@ export default function StudentDashboardPage() {
     );
   };
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     if (selectedClasses.length === 0) {
       toast({ title: "Error", description: "Please select at least one class.", variant: "destructive" });
       return;
@@ -65,26 +99,17 @@ export default function StudentDashboardPage() {
       toast({ title: "Error", description: "Please provide a reason for absence.", variant: "destructive" });
       return;
     }
+    
+    setIsSubmitting(true);
 
-    const allTimetableEntries = Object.values(timetable).flat();
     const selectedClassDetails = selectedClasses.map(classId => {
-      const entry = allTimetableEntries.find(cls => cls.id === classId);
-      if (!entry) {
-        // Fallback to searching the global mockTimetable if not found in component state
-        const globalEntry = mockTimetable.find(cls => cls.id === classId);
-        if (globalEntry) return globalEntry;
-        throw new Error(`Class with id ${classId} not found in timetable`);
-      }
-      return entry;
+      return allTimetableEntries.find(cls => cls.id === classId)!;
     });
 
-    // Group selected classes by facultyId
     const requestsByFaculty = selectedClassDetails.reduce((acc, classDetail) => {
       const facultyId = classDetail.facultyId;
-      if (!facultyId) return acc; // Skip if faculty ID is somehow missing
-      if (!acc[facultyId]) {
-        acc[facultyId] = [];
-      }
+      if (!facultyId) return acc; 
+      if (!acc[facultyId]) acc[facultyId] = [];
       acc[facultyId].push({
         classId: classDetail.id,
         subjectName: classDetail.subjectName,
@@ -94,38 +119,43 @@ export default function StudentDashboardPage() {
       return acc;
     }, {} as Record<string, MissedClassRequest['missedClasses']>);
 
+    try {
+      const requestPromises = Object.entries(requestsByFaculty).map(([facultyId, missedClasses]) => {
+          const newRequestPayload = {
+            studentId: currentUser.id,
+            studentName: currentUser.name,
+            studentPrn: currentUser.prn!,
+            missedClasses: missedClasses,
+            reason,
+            eventId: selectedEvent || '',
+            timestamp: new Date().toISOString(),
+            status: 'Pending' as const,
+            facultyId: facultyId,
+            facultyComment: ''
+          };
+          return addDoc(collection(db, "requests"), newRequestPayload);
+      });
 
-    const newRequests: MissedClassRequest[] = Object.entries(requestsByFaculty).map(([facultyId, missedClasses]) => {
-      const newRequestId = `req${Date.now()}${Math.random().toString(36).substring(2, 7)}`;
-      return {
-        id: newRequestId,
-        studentId: currentUser.id,
-        studentName: currentUser.name,
-        studentPrn: currentUser.prn!,
-        missedClasses: missedClasses,
-        reason,
-        eventId: selectedEvent,
-        timestamp: new Date().toISOString(),
-        status: 'Pending',
-        facultyId: facultyId,
-      };
-    });
-    
-    if (newRequests.length === 0) {
-        toast({ title: "Error", description: "Could not determine faculty for selected classes.", variant: "destructive" });
-        return;
+      await Promise.all(requestPromises);
+
+      toast({ title: "Success", description: `${requestPromises.length} absence request(s) submitted.` });
+      // Reset form state
+      setSelectedClasses([]);
+      setReason('');
+      setSelectedEvent(undefined);
+      // Refresh requests list
+      const requestsQuery = query(collection(db, "requests"), where("studentId", "==", currentUser.id));
+      const requestsSnapshot = await getDocs(requestsQuery);
+      const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+                                     .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setStudentRequests(requestsData);
+
+    } catch (error) {
+       console.error("Error submitting request:", error);
+       toast({ title: "Submission Failed", description: "Could not submit your request.", variant: "destructive"});
+    } finally {
+        setIsSubmitting(false);
     }
-
-    // Simulate API call
-    console.log("Submitting requests:", newRequests);
-    // Add to mock data (in real app, this would be a server action)
-    mockRequests.unshift(...newRequests);
-    setStudentRequests(prev => [...newRequests, ...prev]);
-
-    toast({ title: "Success", description: `${newRequests.length} absence request(s) submitted successfully.` });
-    setSelectedClasses([]);
-    setReason('');
-    setSelectedEvent(undefined);
   };
   
   const getStatusBadgeClasses = (status: MissedClassRequest['status']) => {
@@ -146,6 +176,11 @@ export default function StudentDashboardPage() {
     }
   };
 
+  const getEventName = (eventId?: string) => {
+    if (!eventId) return 'N/A';
+    return events.find(e => e.id === eventId)?.name || 'Unknown Event';
+  };
+
   return (
     <div className="space-y-8">
       <Card className="shadow-lg rounded-xl overflow-hidden">
@@ -154,7 +189,11 @@ export default function StudentDashboardPage() {
           <CardDescription>Select classes you missed and submit an absence request below. Your course: {currentUser.course}, Semester: {currentUser.semester}.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {Object.keys(timetable).length > 0 ? (
+          {isLoading ? (
+             <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+             </div>
+          ) : Object.keys(timetable).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {daysOrder.filter(day => timetable[day] && timetable[day].length > 0).map(day => (
                 <Card key={day} className="bg-background/50 shadow-md rounded-lg">
@@ -218,8 +257,9 @@ export default function StudentDashboardPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleSubmitRequest} size="lg" className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
-            <Send className="mr-2 h-5 w-5" /> Submit Request
+          <Button onClick={handleSubmitRequest} size="lg" className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground shadow-md" disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
+            {isSubmitting ? 'Submitting...' : 'Submit Request'}
           </Button>
         </CardContent>
       </Card>
@@ -246,6 +286,7 @@ export default function StudentDashboardPage() {
                         Classes: {req.missedClasses.map(mc => `${mc.subjectName}`).join(', ')}
                       </p>
                       <p className="text-sm mt-1">Reason: <span className="text-muted-foreground">{req.reason}</span></p>
+                      {req.eventId && <p className="text-sm mt-1">Event: <span className="text-muted-foreground">{getEventName(req.eventId)}</span></p>}
                     </div>
                     <span className={`px-3 py-1.5 text-xs font-semibold rounded-full flex items-center self-start sm:self-center whitespace-nowrap ${getStatusBadgeClasses(req.status)}`}>
                       {getStatusIcon(req.status)}
