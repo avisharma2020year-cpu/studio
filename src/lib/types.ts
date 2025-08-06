@@ -1,4 +1,5 @@
 
+
 export type UserRole = 'student' | 'faculty' | 'admin';
 
 export interface User {
@@ -36,7 +37,8 @@ export interface MissedClassRequest {
   timestamp: string; // ISO date string
   status: RequestStatus;
   facultyComment?: string;
-  facultyId?: string; // To route to correct faculty
+  facultyId?: string; // ID of the faculty member or admin queue this is assigned to
+  approverName?: string; // Name of the selected approver
 }
 
 export interface PreApprovedEvent {
@@ -52,3 +54,5 @@ export interface SubjectFacultyMapping {
   course: string;
   semester: number;
 }
+
+    

@@ -11,9 +11,6 @@ import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } fr
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
-
 
 export default function FacultyDashboardPage() {
   const { toast } = useToast();
@@ -24,29 +21,17 @@ export default function FacultyDashboardPage() {
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchFacultyData = async () => {
+  const fetchFacultyData = () => {
     setIsLoading(true);
-    try {
-      if (!currentUser?.id) {
-        setRequests([]);
-        setIsLoading(false);
-        return;
-      }
-      
-      // Using mock data for prototype
-      const facultyRequests = mockRequests.filter(
-        req => req.facultyId === currentUser.id && req.status === 'Pending'
-      );
-      
-      setRequests(facultyRequests);
-      setEvents(mockEvents);
-
-    } catch (error) {
-      console.error("Error fetching faculty requests:", error);
-      toast({ title: "Error", description: "Could not load requests.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    // Using mock data for prototype
+    const facultyRequests = mockRequests.filter(
+      // Show requests specifically assigned to this faculty member
+      req => req.facultyId === currentUser.id && req.status === 'Pending'
+    );
+    
+    setRequests(facultyRequests);
+    setEvents(mockEvents);
+    setIsLoading(false);
   };
   
   useEffect(() => {
@@ -84,7 +69,7 @@ export default function FacultyDashboardPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-3xl font-headline flex items-center"><Inbox className="mr-3 h-8 w-8 text-primary" />Absence Requests for Approval</CardTitle>
-          <CardDescription>Review pending absence requests from students for your subjects.</CardDescription>
+          <CardDescription>Review pending absence requests from students assigned to you.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -145,10 +130,12 @@ export default function FacultyDashboardPage() {
               })}
             </div>
           ) : (
-            <p className="text-muted-foreground text-center py-10">No pending requests at the moment.</p>
+            <p className="text-muted-foreground text-center py-10">No pending requests assigned to you at the moment.</p>
           )}
         </CardContent>
       </Card>
     </div>
   );
 }
+
+    

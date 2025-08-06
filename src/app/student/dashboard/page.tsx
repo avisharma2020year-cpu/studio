@@ -7,11 +7,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCurrentUser, mockTimetable, mockEvents, mockRequests } from '@/data/mock-data'; 
-import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib/types';
+import { getCurrentUser, mockTimetable, mockEvents, mockRequests, mockUsers } from '@/data/mock-data'; 
+import type { TimetableEntry, PreApprovedEvent, MissedClassRequest, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
+import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2, UserCheck } from 'lucide-react';
 import Link from 'next/link';
+import { Input } from '@/components/ui/input';
 
 // Helper to group timetable by day
 const groupTimetableByDay = (timetable: TimetableEntry[]) => {
@@ -27,12 +28,21 @@ const groupTimetableByDay = (timetable: TimetableEntry[]) => {
 
 const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+const approverList = [
+    { id: 'faculty-ravi', name: 'Dr. Ravi Kiran' },
+    { id: 'faculty-rajanikanth', name: 'Dr. M Rajanikanth' },
+    { id: 'faculty-disha', name: 'Dr. Disha Pathak' },
+    { id: 'faculty-syed', name: 'Syed Sir' },
+    { id: 'faculty-ishaq', name: 'Ishaq Sir' },
+    { id: 'faculty-meera', name: 'Meera Ma’am' },
+    { id: 'other', name: 'Other (Admin/Warden)'}
+];
 
 export default function StudentDashboardPage() {
   const { toast } = useToast();
   const currentUser = getCurrentUser('student'); 
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
   const [allTimetableEntries, setAllTimetableEntries] = useState<TimetableEntry[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
@@ -41,34 +51,22 @@ export default function StudentDashboardPage() {
   const [selectedEvent, setSelectedEvent] = useState<string | undefined>(undefined);
   const [studentRequests, setStudentRequests] = useState<MissedClassRequest[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedApprover, setSelectedApprover] = useState<string | undefined>(undefined);
+  const [otherApproverName, setOtherApproverName] = useState('');
 
-  const fetchStudentData = async () => {
-        setIsLoading(true);
-        try {
-            if (!currentUser.course || !currentUser.semester) {
-                toast({ title: "User Profile Incomplete", description: "Your course and semester are not set.", variant: "destructive"});
-                setTimetable({});
-                setIsLoading(false);
-                return;
-            }
+  const fetchStudentData = () => {
+      setIsLoading(true);
+      // Using mock data for prototype
+      const userTimetable = mockTimetable.filter(
+          (entry) => entry.course === currentUser.course && entry.semester === currentUser.semester
+      );
 
-            // Using mock data for prototype
-            const userTimetable = mockTimetable.filter(
-                (entry) => entry.course === currentUser.course && entry.semester === currentUser.semester
-            );
-
-            setAllTimetableEntries(userTimetable);
-            setTimetable(groupTimetableByDay(userTimetable));
-            setEvents(mockEvents);
-            setStudentRequests(mockRequests.filter(req => req.studentId === currentUser.id));
-
-        } catch (error) {
-            console.error("Error fetching data:", error);
-            toast({ title: "Error", description: "Could not load dashboard data.", variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      setAllTimetableEntries(userTimetable);
+      setTimetable(groupTimetableByDay(userTimetable));
+      setEvents(mockEvents);
+      setStudentRequests(mockRequests.filter(req => req.studentId === currentUser.id));
+      setIsLoading(false);
+  };
 
   useEffect(() => {
     fetchStudentData();
@@ -89,67 +87,62 @@ export default function StudentDashboardPage() {
       toast({ title: "Error", description: "Please provide a reason for absence.", variant: "destructive" });
       return;
     }
+    if (!selectedApprover) {
+        toast({ title: "Error", description: "Please select a faculty member to approve your request.", variant: "destructive"});
+        return;
+    }
+     if (selectedApprover === 'other' && !otherApproverName.trim()) {
+      toast({ title: "Error", description: "Please enter the name of the 'Other' approver.", variant: "destructive" });
+      return;
+    }
     
     setIsSubmitting(true);
 
     const selectedClassDetails = selectedClasses.map(classId => {
-      return allTimetableEntries.find(cls => cls.id === classId)!;
+      const cls = allTimetableEntries.find(c => c.id === classId)!;
+      return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day };
     });
 
-    const requestsByFaculty = selectedClassDetails.reduce((acc, classDetail) => {
-      const facultyId = classDetail.facultyId;
-      if (!facultyId) return acc; 
-      if (!acc[facultyId]) {
-        acc[facultyId] = {
-            facultyId: facultyId,
-            missedClasses: []
-        };
-      }
-      acc[facultyId].missedClasses.push({
-        classId: classDetail.id,
-        subjectName: classDetail.subjectName,
-        timeSlot: classDetail.timeSlot,
-        day: classDetail.day,
-      });
-      return acc;
-    }, {} as Record<string, { facultyId: string; missedClasses: MissedClassRequest['missedClasses'] }>);
+    const approverName = selectedApprover === 'other' 
+        ? otherApproverName
+        : approverList.find(a => a.id === selectedApprover)?.name;
 
-    try {
-      // In a real app, this would save to Firestore. For the prototype, we can simulate it.
-      console.log("Submitting requests:", requestsByFaculty);
-      Object.values(requestsByFaculty).forEach(facultyRequest => {
-          const newRequest: MissedClassRequest = {
-            id: `req-${Date.now()}-${Math.random()}`,
-            studentId: currentUser.id,
-            studentName: currentUser.name,
-            studentPrn: currentUser.prn!,
-            missedClasses: facultyRequest.missedClasses,
-            reason,
-            eventId: selectedEvent || '',
-            timestamp: new Date().toISOString(),
-            status: 'Pending' as const,
-            facultyId: facultyRequest.facultyId,
-            facultyComment: ''
-          };
-          // Add to mock requests for this session
-          mockRequests.push(newRequest);
-      });
+    const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
+    
+    // Create a single request
+    const newRequest: MissedClassRequest = {
+        id: `req-${Date.now()}-${Math.random()}`,
+        studentId: currentUser.id,
+        studentName: currentUser.name,
+        studentPrn: currentUser.prn!,
+        missedClasses: selectedClassDetails,
+        reason,
+        eventId: selectedEvent || '',
+        timestamp: new Date().toISOString(),
+        status: 'Pending' as const,
+        facultyId: facultyIdForRequest,
+        facultyComment: '',
+        approverName: approverName,
+    };
+    
+    // Simulate API call
+    setTimeout(() => {
+      // Add to mock requests for this session
+      mockRequests.push(newRequest);
 
-
-      toast({ title: "Success", description: `${Object.keys(requestsByFaculty).length} absence request(s) submitted.` });
+      toast({ title: "Success", description: `Absence request submitted to ${approverName}.` });
       
+      // Reset form
       setSelectedClasses([]);
       setReason('');
       setSelectedEvent(undefined);
+      setSelectedApprover(undefined);
+      setOtherApproverName('');
       
-      await fetchStudentData();
-
-    } catch (error) {
-       console.error("Error submitting request:", error);
-       toast({ title: "Submission Failed", description: "Could not submit your request.", variant: "destructive"});
-    } finally {
-        setIsSubmitting(false);
-    }
+      // Refresh data on page
+      fetchStudentData();
+      setIsSubmitting(false);
+    }, 1000);
   };
   
   const getStatusBadgeClasses = (status: MissedClassRequest['status']) => {
@@ -251,6 +244,33 @@ export default function StudentDashboardPage() {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="approver" className="text-lg font-medium">Request Approval From</Label>
+            <Select value={selectedApprover} onValueChange={setSelectedApprover}>
+                 <SelectTrigger id="approver" className="mt-2 shadow-sm">
+                    <SelectValue placeholder="Select a faculty member..." />
+                </SelectTrigger>
+                <SelectContent>
+                    {approverList.map(approver => (
+                        <SelectItem key={approver.id} value={approver.id}>{approver.name}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+          </div>
+
+          {selectedApprover === 'other' && (
+              <div className="space-y-2 animate-in fade-in-50">
+                  <Label htmlFor="other-approver" className="text-lg font-medium">Name of Approver</Label>
+                  <Input 
+                    id="other-approver"
+                    value={otherApproverName}
+                    onChange={(e) => setOtherApproverName(e.target.value)}
+                    placeholder="e.g., AO Sir, Warden"
+                    className="shadow-sm"
+                  />
+              </div>
+          )}
+
           <Button onClick={handleSubmitRequest} size="lg" className="w-full md:w-auto bg-primary hover:bg-primary/90 text-primary-foreground shadow-md" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
             {isSubmitting ? 'Submitting...' : 'Submit Request'}
@@ -272,7 +292,7 @@ export default function StudentDashboardPage() {
                 <li key={req.id} className="p-4 border rounded-md bg-background/70 shadow-sm">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
                     <div className="flex-grow">
-                      <p className="font-semibold text-primary">Request ID: {req.id.substring(req.id.length-6)}</p>
+                      <p className="font-semibold text-primary">Request to: {req.approverName}</p>
                       <p className="text-sm text-muted-foreground mt-1">
                         Submitted: {new Date(req.timestamp).toLocaleDateString()}
                       </p>
@@ -306,3 +326,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    
