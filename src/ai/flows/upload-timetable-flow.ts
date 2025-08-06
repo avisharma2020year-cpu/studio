@@ -40,17 +40,14 @@ const uploadTimetableFlow = ai.defineFlow(
         const data = doc.data() as User;
         return [data.name.trim().toLowerCase(), doc.id];
     }));
-    
-    console.log('Faculty Map:', facultyMap);
 
     const newTimetable: TimetableEntry[] = validRows.map((row, index) => {
       // Normalize faculty name from CSV for lookup
       const lookupName = row.Faculty.trim().toLowerCase();
       const facultyId = facultyMap.get(lookupName);
       
-      if (!facultyId && row.Faculty) {
-        console.warn(`Faculty "${row.Faculty}" not found. Skipping facultyId.`);
-      }
+      // We don't skip if faculty is not found, we just leave the facultyId empty
+      // to allow for cases like "Library Session" without an assigned faculty.
 
       return {
         id: `tt-upload-${Date.now()}-${index}`, // This ID is temporary and won't be saved
@@ -68,8 +65,7 @@ const uploadTimetableFlow = ai.defineFlow(
     const semestersInUpload = [...new Set(newTimetable.map(e => e.semester))];
 
     if (coursesInUpload.length > 0 && semestersInUpload.length > 0) {
-      console.log(`Clearing old timetable entries for Course: ${coursesInUpload.join(', ')} and Semester: ${semestersInUpload.join(', ')}`);
-      // Optional: Delete old entries for the same course/semester combination
+      // Delete old entries for the same course/semester combination
       const timetableRef = collection(db, 'timetables');
       const q = query(
           timetableRef, 
@@ -77,15 +73,17 @@ const uploadTimetableFlow = ai.defineFlow(
           where('semester', 'in', semestersInUpload)
       );
       const oldDocsSnapshot = await getDocs(q);
-      const deleteBatch = writeBatch(db);
-      oldDocsSnapshot.forEach(doc => deleteBatch.delete(doc.ref));
-      await deleteBatch.commit();
-      console.log(`Deleted ${oldDocsSnapshot.size} old entries.`);
+      if (!oldDocsSnapshot.empty) {
+        const deleteBatch = writeBatch(db);
+        oldDocsSnapshot.forEach(doc => deleteBatch.delete(doc.ref));
+        await deleteBatch.commit();
+      }
     }
 
     const skippedCount = rows.length - newTimetable.length;
-    console.log(`Processed ${newTimetable.length} valid timetable entries. Skipped ${skippedCount} rows.`);
 
     return { timetable: newTimetable, skipped: skippedCount };
   }
 );
+
+    

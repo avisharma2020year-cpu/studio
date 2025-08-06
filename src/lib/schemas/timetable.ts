@@ -6,11 +6,11 @@ const daysEnum = z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday',
 // Base schema for a single, validated row.
 const TimetableRowSchema = z.object({
   Day: daysEnum,
-  'Time Slot': z.string().min(1),
-  Subject: z.string().min(1),
+  'Time Slot': z.string().min(1, { message: "Time Slot cannot be empty" }),
+  Subject: z.string().min(1, { message: "Subject cannot be empty" }),
   Faculty: z.string().default(''),
-  Course: z.string().min(1),
-  Semester: z.coerce.number(),
+  Course: z.string().min(1, { message: "Course cannot be empty" }),
+  Semester: z.coerce.number().min(1, { message: "Semester must be a positive number" }),
 });
 
 // This transform normalizes various possible header names from the CSV
@@ -37,7 +37,7 @@ const FlexibleTimetableRowSchema = z.any().transform((arg) => {
         return result.data;
     } else {
         // Log errors for debugging if needed, but return null to skip the row.
-        console.warn('Skipping invalid row:', result.error.flatten().fieldErrors);
+        // console.warn('Skipping invalid row:', result.error.flatten().fieldErrors);
         return null;
     }
 });
@@ -53,3 +53,5 @@ export const TimetableUploadOutputSchema = z.object({
   skipped: z.number(),         // count of skipped rows
 });
 export type TimetableUploadOutput = z.infer<typeof TimetableUploadOutputSchema>;
+
+    

@@ -4,36 +4,50 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { getCurrentUser, mockRequests, mockEvents } from '@/data/mock-data';
+import { getCurrentUser } from '@/data/mock-data';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
 
 export default function FacultyDashboardPage() {
   const { toast } = useToast();
-  const currentUser = getCurrentUser('faculty'); 
+  const currentUser = getCurrentUser('faculty');
 
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
   const [comments, setComments] = useState<Record<string, string>>({}); // { requestId: comment }
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchFacultyData = () => {
+  const fetchFacultyData = async () => {
     setIsLoading(true);
-    // Using mock data for prototype
-    const facultyRequests = mockRequests.filter(
-      // Show requests specifically assigned to this faculty member
-      req => req.facultyId === currentUser.id && req.status === 'Pending'
-    );
-    
-    setRequests(facultyRequests);
-    setEvents(mockEvents);
-    setIsLoading(false);
+    if (!currentUser?.id) {
+        setIsLoading(false);
+        return;
+    }
+    try {
+        const requestsQuery = query(
+            collection(db, "requests"),
+            where("facultyId", "==", currentUser.id),
+            where("status", "==", "Pending")
+        );
+        const requestsSnapshot = await getDocs(requestsQuery);
+        setRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
+
+        const eventsSnapshot = await getDocs(collection(db, "events"));
+        setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+    } catch (error) {
+        console.error("Error fetching faculty data:", error);
+        toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive"});
+    } finally {
+        setIsLoading(false);
+    }
   };
-  
+
   useEffect(() => {
     fetchFacultyData();
   }, []);
@@ -44,25 +58,25 @@ export default function FacultyDashboardPage() {
       toast({ title: "Error", description: "Please provide a comment for rejection.", variant: "destructive" });
       return;
     }
-    
-    // Simulate updating mock data
-    const requestIndex = mockRequests.findIndex(req => req.id === requestId);
-    if (requestIndex !== -1) {
-        mockRequests[requestIndex].status = status;
-        mockRequests[requestIndex].facultyComment = comment;
-    }
 
-    toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
-    
-    // Refresh the view from the modified mock data
-    fetchFacultyData();
+    try {
+        const requestDocRef = doc(db, "requests", requestId);
+        await updateDoc(requestDocRef, {
+            status,
+            facultyComment: comment
+        });
+        toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
+        fetchFacultyData(); // Refresh the list
+    } catch (error) {
+        console.error("Error updating request:", error);
+        toast({ title: "Error", description: "Could not update the request status.", variant: "destructive"});
+    }
   };
-  
+
    const getEventName = (eventId?: string) => {
     if (!eventId) return 'N/A';
     return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   }
-
 
   return (
     <div className="space-y-8">
@@ -108,7 +122,7 @@ export default function FacultyDashboardPage() {
                       )}
                       <div className="pt-2">
                         <Label htmlFor={`comment-${req.id}`} className="font-semibold text-sm mb-1">Your Comment (Required for Rejection):</Label>
-                        <Textarea 
+                        <Textarea
                           id={`comment-${req.id}`}
                           value={comments[req.id] || ''}
                           onChange={(e) => setComments(prev => ({ ...prev, [req.id]: e.target.value }))}

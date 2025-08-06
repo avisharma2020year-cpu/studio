@@ -1,24 +1,67 @@
+
+"use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Users, CalendarCheck, AlertTriangle, CheckCircle } from "lucide-react";
+import { BarChart, Users, CalendarCheck, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-// Mock data import - replace with actual data fetching
-import { mockRequests, mockUsers, mockTimetable } from "@/data/mock-data";
+import { useEffect, useState } from "react";
+import { collection, getDocs, query, where,getCountFromServer } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+interface QuickStats {
+  totalRequests: number;
+  pendingRequests: number;
+  approvedRequests: number;
+  totalUsers: number;
+  totalTimetableEntries: number;
+}
 
 export default function AdminDashboardPage() {
-  const totalRequests = mockRequests.length;
-  const pendingRequests = mockRequests.filter(r => r.status === 'Pending').length;
-  const approvedRequests = mockRequests.filter(r => r.status === 'Approved').length;
-  const totalUsers = mockUsers.length;
-  const totalTimetableEntries = mockTimetable.length;
+  const [stats, setStats] = useState<QuickStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const quickStats = [
-    { title: "Total Requests", value: totalRequests, icon: <BarChart className="h-8 w-8 text-primary" />, color: "text-blue-500", href: "/admin/requests" },
-    { title: "Pending Approval", value: pendingRequests, icon: <AlertTriangle className="h-8 w-8 text-yellow-500" />, color: "text-yellow-500" , href: "/admin/requests?status=Pending"},
-    { title: "Approved Requests", value: approvedRequests, icon: <CheckCircle className="h-8 w-8 text-green-500" />, color: "text-green-500", href: "/admin/requests?status=Approved" },
-    { title: "Total Users", value: totalUsers, icon: <Users className="h-8 w-8 text-indigo-500" />, color: "text-indigo-500", href: "/admin/users" },
-    { title: "Timetable Entries", value: totalTimetableEntries, icon: <CalendarCheck className="h-8 w-8 text-purple-500" />, color: "text-purple-500", href: "/admin/timetables" },
+  useEffect(() => {
+    const fetchStats = async () => {
+      setIsLoading(true);
+      try {
+        const requestsRef = collection(db, "requests");
+        const usersRef = collection(db, "users");
+        const timetablesRef = collection(db, "timetables");
+
+        const totalRequestsSnapshot = await getCountFromServer(requestsRef);
+        const pendingRequestsSnapshot = await getCountFromServer(query(requestsRef, where("status", "==", "Pending")));
+        const approvedRequestsSnapshot = await getCountFromServer(query(requestsRef, where("status", "==", "Approved")));
+        const totalUsersSnapshot = await getCountFromServer(usersRef);
+        const totalTimetableEntriesSnapshot = await getCountFromServer(timetablesRef);
+        
+        const studentCountSnapshot = await getCountFromServer(query(usersRef, where("role", "==", "student")));
+        const facultyCountSnapshot = await getCountFromServer(query(usersRef, where("role", "==", "faculty")));
+
+
+        setStats({
+          totalRequests: totalRequestsSnapshot.data().count,
+          pendingRequests: pendingRequestsSnapshot.data().count,
+          approvedRequests: approvedRequestsSnapshot.data().count,
+          totalUsers: totalUsersSnapshot.data().count,
+          totalTimetableEntries: totalTimetableEntriesSnapshot.data().count,
+        });
+      } catch (error) {
+        console.error("Error fetching admin stats:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+
+  const quickStatsConfig = [
+    { title: "Total Requests", value: stats?.totalRequests, icon: <BarChart className="h-8 w-8 text-primary" />, color: "text-blue-500", href: "/admin/requests" },
+    { title: "Pending Approval", value: stats?.pendingRequests, icon: <AlertTriangle className="h-8 w-8 text-yellow-500" />, color: "text-yellow-500" , href: "/admin/requests?status=Pending"},
+    { title: "Approved Requests", value: stats?.approvedRequests, icon: <CheckCircle className="h-8 w-8 text-green-500" />, color: "text-green-500", href: "/admin/requests?status=Approved" },
+    { title: "Total Users", value: stats?.totalUsers, icon: <Users className="h-8 w-8 text-indigo-500" />, color: "text-indigo-500", href: "/admin/users" },
+    { title: "Timetable Entries", value: stats?.totalTimetableEntries, icon: <CalendarCheck className="h-8 w-8 text-purple-500" />, color: "text-purple-500", href: "/admin/timetables" },
   ];
 
   return (
@@ -29,14 +72,18 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {quickStats.map((stat) => (
+        {quickStatsConfig.map((stat) => (
           <Card key={stat.title} className="shadow-md hover:shadow-lg transition-shadow rounded-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
               {stat.icon}
             </CardHeader>
             <CardContent>
-              <div className={`text-3xl font-bold ${stat.color}`}>{stat.value}</div>
+              {isLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <div className={`text-3xl font-bold ${stat.color}`}>{stat.value ?? 0}</div>
+              )}
               {stat.href && (
                 <Link href={stat.href} className="text-xs text-muted-foreground hover:text-primary pt-1">
                   View details &rarr;
@@ -92,7 +139,7 @@ export default function AdminDashboardPage() {
             </Button>
           </CardContent>
         </Card>
-        
+
         <Card className="shadow-md rounded-lg overflow-hidden">
           <CardHeader>
             <CardTitle className="text-xl font-headline">System Status</CardTitle>
@@ -104,8 +151,8 @@ export default function AdminDashboardPage() {
                 <p>All systems operational.</p>
              </div>
              <div className="flex items-center">
-                <Users className="h-5 w-5 text-muted-foreground mr-2" />
-                <p>{mockUsers.filter(u => u.role === 'student').length} Students, {mockUsers.filter(u => u.role === 'faculty').length} Faculty active.</p>
+                 {isLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Users className="h-5 w-5 text-muted-foreground mr-2" />}
+                <p>{isLoading ? 'Loading user counts...' : `${stats?.totalUsers ?? 0} total users active.`}</p>
              </div>
              <div className="h-40 relative rounded-md overflow-hidden mt-2">
                 <Image src="https://placehold.co/600x300.png" alt="System activity chart placeholder" layout="fill" objectFit="cover" data-ai-hint="data chart" />
@@ -116,3 +163,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { getCurrentUser, mockRequests, mockEvents } from '@/data/mock-data';
+import { getCurrentUser } from '@/data/mock-data';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Clock, ListFilter, FileText, Loader2 } from 'lucide-react';
@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 
 export default function MyRequestsPage() {
   const currentUser = getCurrentUser('student');
@@ -29,12 +31,16 @@ export default function MyRequestsPage() {
       setIsLoading(true);
       if (!currentUser?.id) return;
       try {
-        // Using mock data for prototype
-        const requestsData = mockRequests.filter(req => req.studentId === currentUser.id)
-                                      .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        setRequests(requestsData);
-        setEvents(mockEvents);
+        const requestsQuery = query(
+          collection(db, "requests"),
+          where("studentId", "==", currentUser.id),
+          orderBy("timestamp", "desc")
+        );
+        const requestsSnapshot = await getDocs(requestsQuery);
+        setRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
 
+        const eventsSnapshot = await getDocs(collection(db, "events"));
+        setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
       } catch (error) {
         console.error("Error fetching requests:", error);
       } finally {
@@ -57,12 +63,12 @@ export default function MyRequestsPage() {
       default: return null;
     }
   };
-  
+
   const getStatusBadgeVariant = (status: MissedClassRequest['status']): "default" | "secondary" | "destructive" | "outline" => {
     switch (status) {
       case 'Approved': return 'default';
       case 'Rejected': return 'destructive';
-      case 'Pending': return 'secondary'; 
+      case 'Pending': return 'secondary';
       default: return 'outline';
     }
   };
@@ -71,7 +77,6 @@ export default function MyRequestsPage() {
     if (!eventId) return 'N/A';
     return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   }
-
 
   return (
     <div className="space-y-8">
@@ -96,7 +101,7 @@ export default function MyRequestsPage() {
               </Button>
             ))}
           </div>
-          
+
           {isLoading ? (
              <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -107,6 +112,7 @@ export default function MyRequestsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[150px]">Date Submitted</TableHead>
+                    <TableHead>Approver</TableHead>
                     <TableHead>Missed Classes</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Event</TableHead>
@@ -118,6 +124,7 @@ export default function MyRequestsPage() {
                   {filteredRequests.map(req => (
                     <TableRow key={req.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="text-xs">{format(new Date(req.timestamp), 'dd MMM yyyy, HH:mm')}</TableCell>
+                      <TableCell className="font-medium">{req.approverName}</TableCell>
                       <TableCell>
                         <ul className="list-disc list-inside text-xs space-y-0.5">
                           {req.missedClasses.map(mc => (
@@ -147,3 +154,5 @@ export default function MyRequestsPage() {
     </div>
   );
 }
+
+    

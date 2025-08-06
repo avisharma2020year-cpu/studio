@@ -7,12 +7,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCurrentUser, mockTimetable, mockEvents, mockRequests, mockUsers } from '@/data/mock-data'; 
+import { getCurrentUser } from '@/data/mock-data';
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2, UserCheck } from 'lucide-react';
+import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, query, where, orderBy, limit } from 'firebase/firestore';
 
 // Helper to group timetable by day
 const groupTimetableByDay = (timetable: TimetableEntry[]) => {
@@ -28,24 +30,16 @@ const groupTimetableByDay = (timetable: TimetableEntry[]) => {
 
 const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-const approverList = [
-    { id: 'faculty-ravi', name: 'Dr. Ravi Kiran' },
-    { id: 'faculty-rajanikanth', name: 'Dr. M Rajanikanth' },
-    { id: 'faculty-disha', name: 'Dr. Disha Pathak' },
-    { id: 'faculty-syed', name: 'Syed Sir' },
-    { id: 'faculty-ishaq', name: 'Ishaq Sir' },
-    { id: 'faculty-meera', name: 'Meera Ma’am' },
-    { id: 'other', name: 'Other (Admin/Warden)'}
-];
-
 export default function StudentDashboardPage() {
   const { toast } = useToast();
-  const currentUser = getCurrentUser('student'); 
+  const currentUser = getCurrentUser('student');
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
   const [allTimetableEntries, setAllTimetableEntries] = useState<TimetableEntry[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [approverList, setApproverList] = useState<User[]>([]);
+
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<string | undefined>(undefined);
@@ -54,18 +48,47 @@ export default function StudentDashboardPage() {
   const [selectedApprover, setSelectedApprover] = useState<string | undefined>(undefined);
   const [otherApproverName, setOtherApproverName] = useState('');
 
-  const fetchStudentData = () => {
-      setIsLoading(true);
-      // Using mock data for prototype
-      const userTimetable = mockTimetable.filter(
-          (entry) => entry.course === currentUser.course && entry.semester === currentUser.semester
-      );
+  const fetchStudentData = async () => {
+    setIsLoading(true);
+    if (!currentUser?.course || !currentUser?.semester) {
+        toast({ title: "Error", description: "Your course and semester are not set. Please contact an admin.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+    }
+    try {
+        const timetableQuery = query(
+            collection(db, "timetables"),
+            where("course", "==", currentUser.course),
+            where("semester", "==", currentUser.semester)
+        );
+        const timetableSnapshot = await getDocs(timetableQuery);
+        const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+        
+        setAllTimetableEntries(userTimetable);
+        setTimetable(groupTimetableByDay(userTimetable));
 
-      setAllTimetableEntries(userTimetable);
-      setTimetable(groupTimetableByDay(userTimetable));
-      setEvents(mockEvents);
-      setStudentRequests(mockRequests.filter(req => req.studentId === currentUser.id));
-      setIsLoading(false);
+        const eventsSnapshot = await getDocs(collection(db, "events"));
+        setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+
+        const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
+        const facultySnapshot = await getDocs(facultyQuery);
+        setApproverList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+        
+        const requestsQuery = query(
+          collection(db, "requests"), 
+          where("studentId", "==", currentUser.id),
+          orderBy("timestamp", "desc"),
+          limit(3)
+        );
+        const requestsSnapshot = await getDocs(requestsQuery);
+        setStudentRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
+
+    } catch (error) {
+        console.error("Error fetching student data:", error);
+        toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -73,7 +96,7 @@ export default function StudentDashboardPage() {
   }, []);
 
   const handleClassSelection = (classId: string) => {
-    setSelectedClasses(prev => 
+    setSelectedClasses(prev =>
       prev.includes(classId) ? prev.filter(id => id !== classId) : [...prev, classId]
     );
   };
@@ -95,7 +118,7 @@ export default function StudentDashboardPage() {
       toast({ title: "Error", description: "Please enter the name of the 'Other' approver.", variant: "destructive" });
       return;
     }
-    
+
     setIsSubmitting(true);
 
     const selectedClassDetails = selectedClasses.map(classId => {
@@ -103,15 +126,14 @@ export default function StudentDashboardPage() {
       return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day };
     });
 
-    const approverName = selectedApprover === 'other' 
+    const approverName = selectedApprover === 'other'
         ? otherApproverName
         : approverList.find(a => a.id === selectedApprover)?.name;
 
     const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
-    
+
     // Create a single request
-    const newRequest: MissedClassRequest = {
-        id: `req-${Date.now()}-${Math.random()}`,
+    const newRequest: Omit<MissedClassRequest, 'id'> = {
         studentId: currentUser.id,
         studentName: currentUser.name,
         studentPrn: currentUser.prn!,
@@ -124,27 +146,28 @@ export default function StudentDashboardPage() {
         facultyComment: '',
         approverName: approverName,
     };
-    
-    // Simulate API call
-    setTimeout(() => {
-      // Add to mock requests for this session
-      mockRequests.push(newRequest);
 
-      toast({ title: "Success", description: `Absence request submitted to ${approverName}.` });
-      
-      // Reset form
-      setSelectedClasses([]);
-      setReason('');
-      setSelectedEvent(undefined);
-      setSelectedApprover(undefined);
-      setOtherApproverName('');
-      
-      // Refresh data on page
-      fetchStudentData();
-      setIsSubmitting(false);
-    }, 1000);
+    try {
+        await addDoc(collection(db, "requests"), newRequest);
+        toast({ title: "Success", description: `Absence request submitted to ${approverName}.` });
+        
+        // Reset form
+        setSelectedClasses([]);
+        setReason('');
+        setSelectedEvent(undefined);
+        setSelectedApprover(undefined);
+        setOtherApproverName('');
+        
+        // Refresh data on page
+        fetchStudentData();
+    } catch (error) {
+        console.error("Error submitting request:", error);
+        toast({ title: "Submission Failed", description: "Could not submit your request.", variant: "destructive"});
+    } finally {
+        setIsSubmitting(false);
+    }
   };
-  
+
   const getStatusBadgeClasses = (status: MissedClassRequest['status']) => {
     switch (status) {
       case 'Approved': return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
@@ -153,7 +176,7 @@ export default function StudentDashboardPage() {
       default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
     }
   };
-  
+
    const getStatusIcon = (status: MissedClassRequest['status']) => {
     switch (status) {
       case 'Approved': return <CheckCircle className="mr-1.5 h-3.5 w-3.5" />;
@@ -190,8 +213,8 @@ export default function StudentDashboardPage() {
                   <CardContent className="space-y-3">
                     {timetable[day].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
                       <div key={entry.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm">
-                        <Checkbox 
-                          id={`class-${entry.id}`} 
+                        <Checkbox
+                          id={`class-${entry.id}`}
                           checked={selectedClasses.includes(entry.id)}
                           onCheckedChange={() => handleClassSelection(entry.id)}
                           aria-label={`Select class ${entry.subjectName} at ${entry.timeSlot}`}
@@ -222,12 +245,12 @@ export default function StudentDashboardPage() {
         <CardContent className="space-y-6 pt-6">
           <div>
             <Label htmlFor="reason" className="text-lg font-medium">Reason for Absence</Label>
-            <Textarea 
-              id="reason" 
-              value={reason} 
+            <Textarea
+              id="reason"
+              value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g., Medical appointment, family emergency, etc." 
-              className="mt-2 min-h-[100px] shadow-sm" 
+              placeholder="e.g., Medical appointment, family emergency, etc."
+              className="mt-2 min-h-[100px] shadow-sm"
               rows={4}
             />
           </div>
@@ -254,6 +277,7 @@ export default function StudentDashboardPage() {
                     {approverList.map(approver => (
                         <SelectItem key={approver.id} value={approver.id}>{approver.name}</SelectItem>
                     ))}
+                     <SelectItem value="other">Other (Admin/Warden)</SelectItem>
                 </SelectContent>
             </Select>
           </div>
@@ -261,7 +285,7 @@ export default function StudentDashboardPage() {
           {selectedApprover === 'other' && (
               <div className="space-y-2 animate-in fade-in-50">
                   <Label htmlFor="other-approver" className="text-lg font-medium">Name of Approver</Label>
-                  <Input 
+                  <Input
                     id="other-approver"
                     value={otherApproverName}
                     onChange={(e) => setOtherApproverName(e.target.value)}
@@ -277,7 +301,7 @@ export default function StudentDashboardPage() {
           </Button>
         </CardContent>
       </Card>
-      
+
        <Card className="shadow-lg rounded-xl">
         <CardHeader className="bg-muted/30">
           <CardTitle className="text-2xl font-headline flex items-center">
@@ -286,9 +310,13 @@ export default function StudentDashboardPage() {
            <CardDescription>A quick look at your latest absence request submissions.</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {studentRequests.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : studentRequests.length > 0 ? (
             <ul className="space-y-4">
-              {studentRequests.slice(0, 3).map(req => ( // Show 3 most recent
+              {studentRequests.map(req => ( // Show 3 most recent
                 <li key={req.id} className="p-4 border rounded-md bg-background/70 shadow-sm">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
                     <div className="flex-grow">
@@ -312,7 +340,7 @@ export default function StudentDashboardPage() {
               ))}
             </ul>
           ) : (
-             <p className="text-muted-foreground text-center py-6">{isLoading ? 'Loading requests...' : 'No requests submitted yet.'}</p>
+             <p className="text-muted-foreground text-center py-6">No requests submitted yet.</p>
           )}
           {studentRequests.length > 0 && (
             <Button variant="link" asChild className="mt-4 px-0 text-primary">

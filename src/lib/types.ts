@@ -1,5 +1,4 @@
 
-
 export type UserRole = 'student' | 'faculty' | 'admin';
 
 export interface User {
@@ -19,7 +18,7 @@ export interface TimetableEntry {
   timeSlot: string; // e.g., "09:00 - 10:00"
   subjectName: string;
   facultyName: string;
-  facultyId?: string;
+  facultyId: string;
   course: string;
   semester: number;
 }
