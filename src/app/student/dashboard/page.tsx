@@ -12,9 +12,6 @@ import type { TimetableEntry, PreApprovedEvent, MissedClassRequest } from '@/lib
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, where, query, addDoc } from 'firebase/firestore';
-
 
 // Helper to group timetable by day
 const groupTimetableByDay = (timetable: TimetableEntry[]) => {
