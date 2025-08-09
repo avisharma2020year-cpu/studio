@@ -23,13 +23,13 @@ import {
 } from "@/components/ui/dialog";
 import type { User, UserRole } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit2, Trash2, Search, Users, Filter, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Search, Users, Filter, Loader2, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
-
-const initialNewUserState: Omit<User, 'id'> = {
+const initialNewUserState: Omit<User, 'id'> & { password?: string } = {
   name: '',
   email: '',
   role: 'student',
@@ -37,6 +37,7 @@ const initialNewUserState: Omit<User, 'id'> = {
   course: '',
   semester: undefined,
   subjects: [],
+  password: ''
 };
 
 export default function AdminUsersPage() {
@@ -47,7 +48,7 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState<Omit<User, 'id'>>(initialNewUserState);
+  const [formData, setFormData] = useState<Omit<User, 'id'> & { password?: string }>(initialNewUserState);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -65,7 +66,7 @@ export default function AdminUsersPage() {
   
   useEffect(() => {
     fetchUsers();
-  }, [toast]);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -106,33 +107,61 @@ export default function AdminUsersPage() {
       return;
     }
 
+    setIsLoading(true);
     try {
         if (editingUser) {
+            // Update user document in Firestore
             const userDocRef = doc(db, "users", editingUser.id);
-            await updateDoc(userDocRef, formData);
+            const { id, ...updateData } = { ...formData, id: editingUser.id };
+            await updateDoc(userDocRef, updateData);
             toast({ title: "Success", description: "User updated successfully." });
         } else {
-            await addDoc(collection(db, "users"), formData);
-            toast({ title: "Success", description: "User added successfully." });
+            // Create new user
+            if (!formData.password || formData.password.length < 6) {
+              toast({ title: "Error", description: "A password with at least 6 characters is required for new users.", variant: "destructive" });
+              setIsLoading(false);
+              return;
+            }
+            // Create user in Firebase Auth
+            const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+            const newUserId = userCredential.user.uid;
+
+            // Create user document in Firestore
+            const { password, ...userData } = formData;
+            const userDocRef = doc(db, "users", newUserId);
+            await setDoc(userDocRef, userData);
+            
+            toast({ title: "Success", description: "User created successfully." });
         }
-        fetchUsers();
+        await fetchUsers();
         setIsFormOpen(false);
         setEditingUser(null);
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving user:", error);
-        toast({ title: "Error", description: "Could not save the user.", variant: "destructive" });
+        let errorMessage = "Could not save the user.";
+        if (error.code === 'auth/email-already-in-use') {
+            errorMessage = "This email is already registered.";
+        }
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    } finally {
+        setIsLoading(false);
     }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
+    if (window.confirm("Are you sure you want to delete this user? This action cannot be undone and will delete their login credentials.")) {
+      setIsLoading(true);
       try {
         await deleteDoc(doc(db, "users", userId));
-        toast({ title: "Success", description: "User deleted successfully." });
-        fetchUsers();
+        // Note: This doesn't delete the user from Firebase Auth to prevent locking them out
+        // of a re-created account. For full deletion, a cloud function is needed.
+        toast({ title: "Success", description: "User data deleted successfully." });
+        await fetchUsers();
       } catch (error) {
         console.error("Error deleting user:", error);
         toast({ title: "Error", description: "Could not delete the user.", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
       }
     }
   };
@@ -253,8 +282,14 @@ export default function AdminUsersPage() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="email" className="text-right">Email</Label>
-              <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} className="col-span-3" />
+              <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} className="col-span-3" disabled={!!editingUser} />
             </div>
+            {!editingUser && (
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="password" className="text-right flex items-center gap-1"><KeyRound className="h-3 w-3" />Password</Label>
+                    <Input id="password" name="password" type="password" value={formData.password} onChange={handleInputChange} className="col-span-3" placeholder="Min 6 characters" />
+                </div>
+            )}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="role" className="text-right">Role</Label>
               <Select value={formData.role} onValueChange={handleRoleChange}>
@@ -293,7 +328,10 @@ export default function AdminUsersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90 text-primary-foreground">{editingUser ? 'Save Changes' : 'Add User'}</Button>
+            <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {editingUser ? 'Save Changes' : 'Create User'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

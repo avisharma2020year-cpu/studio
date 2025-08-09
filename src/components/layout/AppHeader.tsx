@@ -6,14 +6,13 @@ import AppLogo from '@/components/shared/AppLogo';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { UserCircle, LogOut, LayoutDashboard, Settings, Moon, Sun } from 'lucide-react';
+import { LogOut, LayoutDashboard, Settings, Moon, Sun, UserCircle } from 'lucide-react';
 import type { UserRole } from '@/lib/types';
 import { useEffect, useState } from 'react';
-
-interface AppHeaderProps {
-  currentRole?: UserRole;
-  userName?: string;
-}
+import { useAuth } from '@/hooks/use-auth';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 const navLinks: Record<UserRole, { href: string; label: string }[]> = {
   student: [
@@ -23,11 +22,13 @@ const navLinks: Record<UserRole, { href: string; label: string }[]> = {
   faculty: [
     { href: '/faculty/dashboard', label: 'Approve Requests' },
   ],
-  admin: [], // Admin uses sidebar, so header nav might be minimal
+  admin: [], // Admin uses sidebar
 };
 
-export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
+export default function AppHeader() {
   const router = useRouter();
+  const { toast } = useToast();
+  const { user } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
 
@@ -47,10 +48,15 @@ export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
     }
   };
 
-
-  const handleLogout = () => {
-    // Mock logout: navigate to home
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      router.push('/');
+    } catch (error) {
+      console.error("Logout failed:", error);
+      toast({ title: "Error", description: "Failed to log out.", variant: "destructive" });
+    }
   };
 
   const getInitials = (name?: string) => {
@@ -59,8 +65,17 @@ export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
   };
   
   if (!mounted) {
-    return null; // Don't render on the server to avoid hydration mismatches
+    return (
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <AppLogo />
+        </div>
+      </header>
+    );
   }
+
+  const currentRole = user?.role;
+  const userName = user?.name;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -83,7 +98,7 @@ export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
           )}
-          {userName ? (
+          {userName && currentRole ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -98,17 +113,15 @@ export default function AppHeader({ currentRole, userName }: AppHeaderProps) {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{userName}</p>
                     <p className="text-xs leading-none text-muted-foreground">
-                      {currentRole ? currentRole.charAt(0).toUpperCase() + currentRole.slice(1) : ''}
+                      {currentRole.charAt(0).toUpperCase() + currentRole.slice(1)}
                     </p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {currentRole && (
-                   <DropdownMenuItem onClick={() => router.push(`/${currentRole}/dashboard`)}>
-                    <LayoutDashboard className="mr-2 h-4 w-4" />
-                    <span>Dashboard</span>
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem onClick={() => router.push(`/${currentRole}/dashboard`)}>
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  <span>Dashboard</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem disabled>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>

@@ -1,18 +1,33 @@
 "use client";
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import AppHeader from "@/components/layout/AppHeader";
-import { getCurrentUser } from "@/data/mock-data"; // Mock, replace with actual auth
+import { Loader2 } from 'lucide-react';
 
 export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // In a real app, user data would come from context/session
-  const currentUser = getCurrentUser('student'); 
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'student') {
+    router.replace('/login?role=student');
+    return null;
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
-      <AppHeader currentRole="student" userName={currentUser.name} />
+      <AppHeader />
       <main className="flex-grow container mx-auto px-4 py-8">
         {children}
       </main>

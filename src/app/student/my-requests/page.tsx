@@ -1,9 +1,8 @@
-
 "use client";
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { getCurrentUser } from '@/data/mock-data';
+import { useAuth } from '@/hooks/use-auth';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, XCircle, Clock, ListFilter, FileText, Loader2 } from 'lucide-react';
@@ -20,7 +19,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 
 export default function MyRequestsPage() {
-  const currentUser = getCurrentUser('student');
+  const { user: currentUser } = useAuth();
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,8 +27,8 @@ export default function MyRequestsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
       if (!currentUser?.id) return;
+      setIsLoading(true);
       try {
         const requestsQuery = query(
           collection(db, "requests"),
@@ -48,7 +47,7 @@ export default function MyRequestsPage() {
       }
     }
     fetchData();
-  }, [currentUser.id]);
+  }, [currentUser]);
 
   const filteredRequests = requests.filter(req => {
     if (filter === 'All') return true;
@@ -154,5 +153,3 @@ export default function MyRequestsPage() {
     </div>
   );
 }
-
-    

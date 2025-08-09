@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 const daysEnum = z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
@@ -8,7 +7,7 @@ const TimetableRowSchema = z.object({
   Day: daysEnum,
   'Time Slot': z.string().min(1, { message: "Time Slot cannot be empty" }),
   Subject: z.string().min(1, { message: "Subject cannot be empty" }),
-  Faculty: z.string().default(''),
+  Faculty: z.string().default(''), // Can be empty for things like "Library Session"
   Course: z.string().min(1, { message: "Course cannot be empty" }),
   Semester: z.coerce.number().min(1, { message: "Semester must be a positive number" }),
 });
@@ -53,5 +52,3 @@ export const TimetableUploadOutputSchema = z.object({
   skipped: z.number(),         // count of skipped rows
 });
 export type TimetableUploadOutput = z.infer<typeof TimetableUploadOutputSchema>;
-
-    

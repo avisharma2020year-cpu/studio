@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow for processing uploaded timetable data.
@@ -85,5 +84,3 @@ const uploadTimetableFlow = ai.defineFlow(
     return { timetable: newTimetable, skipped: skippedCount };
   }
 );
-
-    

@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCurrentUser } from '@/data/mock-data';
+import { useAuth } from '@/hooks/use-auth';
 import type { TimetableEntry, PreApprovedEvent, MissedClassRequest, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loader2 } from 'lucide-react';
@@ -30,9 +29,18 @@ const groupTimetableByDay = (timetable: TimetableEntry[]) => {
 
 const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+const facultyApprovers = [
+    "Ravi Sir",
+    "Rajinikanth Sir",
+    "Disha Ma’am",
+    "Syed Sir",
+    "Ishaq Sir",
+    "Meera Ma’am"
+];
+
 export default function StudentDashboardPage() {
   const { toast } = useToast();
-  const currentUser = getCurrentUser('student');
+  const { user: currentUser } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
   const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
@@ -48,52 +56,54 @@ export default function StudentDashboardPage() {
   const [selectedApprover, setSelectedApprover] = useState<string | undefined>(undefined);
   const [otherApproverName, setOtherApproverName] = useState('');
 
-  const fetchStudentData = async () => {
-    setIsLoading(true);
-    if (!currentUser?.course || !currentUser?.semester) {
-        toast({ title: "Error", description: "Your course and semester are not set. Please contact an admin.", variant: "destructive" });
-        setIsLoading(false);
-        return;
-    }
-    try {
-        const timetableQuery = query(
-            collection(db, "timetables"),
-            where("course", "==", currentUser.course),
-            where("semester", "==", currentUser.semester)
-        );
-        const timetableSnapshot = await getDocs(timetableQuery);
-        const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
-        
-        setAllTimetableEntries(userTimetable);
-        setTimetable(groupTimetableByDay(userTimetable));
-
-        const eventsSnapshot = await getDocs(collection(db, "events"));
-        setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
-
-        const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
-        const facultySnapshot = await getDocs(facultyQuery);
-        setApproverList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-        
-        const requestsQuery = query(
-          collection(db, "requests"), 
-          where("studentId", "==", currentUser.id),
-          orderBy("timestamp", "desc"),
-          limit(3)
-        );
-        const requestsSnapshot = await getDocs(requestsQuery);
-        setStudentRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
-
-    } catch (error) {
-        console.error("Error fetching student data:", error);
-        toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive" });
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchStudentData();
-  }, []);
+    const fetchStudentData = async () => {
+      if (!currentUser?.course || !currentUser?.semester) {
+          toast({ title: "Profile Incomplete", description: "Your course and semester are not set. Please contact an admin.", variant: "destructive" });
+          setIsLoading(false);
+          return;
+      }
+      setIsLoading(true);
+      try {
+          const timetableQuery = query(
+              collection(db, "timetables"),
+              where("course", "==", currentUser.course),
+              where("semester", "==", currentUser.semester)
+          );
+          const timetableSnapshot = await getDocs(timetableQuery);
+          const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+          
+          setAllTimetableEntries(userTimetable);
+          setTimetable(groupTimetableByDay(userTimetable));
+
+          const eventsSnapshot = await getDocs(collection(db, "events"));
+          setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+
+          // Fetch only the specific faculty members for the dropdown
+          const facultyQuery = query(collection(db, "users"), where("name", "in", facultyApprovers));
+          const facultySnapshot = await getDocs(facultyQuery);
+          setApproverList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+          
+          const requestsQuery = query(
+            collection(db, "requests"), 
+            where("studentId", "==", currentUser.id),
+            orderBy("timestamp", "desc"),
+            limit(3)
+          );
+          const requestsSnapshot = await getDocs(requestsQuery);
+          setStudentRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
+
+      } catch (error) {
+          console.error("Error fetching student data:", error);
+          toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive" });
+      } finally {
+          setIsLoading(false);
+      }
+    };
+    if (currentUser) {
+      fetchStudentData();
+    }
+  }, [currentUser, toast]);
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev =>
@@ -102,6 +112,8 @@ export default function StudentDashboardPage() {
   };
 
   const handleSubmitRequest = async () => {
+    if (!currentUser) return;
+
     if (selectedClasses.length === 0) {
       toast({ title: "Error", description: "Please select at least one class.", variant: "destructive" });
       return;
@@ -126,13 +138,10 @@ export default function StudentDashboardPage() {
       return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day };
     });
 
-    const approverName = selectedApprover === 'other'
-        ? otherApproverName
-        : approverList.find(a => a.id === selectedApprover)?.name;
-
+    const approver = approverList.find(a => a.id === selectedApprover);
+    const approverName = selectedApprover === 'other' ? otherApproverName : approver?.name;
     const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
 
-    // Create a single request
     const newRequest: Omit<MissedClassRequest, 'id'> = {
         studentId: currentUser.id,
         studentName: currentUser.name,
@@ -148,8 +157,12 @@ export default function StudentDashboardPage() {
     };
 
     try {
-        await addDoc(collection(db, "requests"), newRequest);
+        const docRef = await addDoc(collection(db, "requests"), newRequest);
         toast({ title: "Success", description: `Absence request submitted to ${approverName}.` });
+        
+        // Refresh recent requests
+        const newReqDoc = { id: docRef.id, ...newRequest };
+        setStudentRequests(prev => [newReqDoc as MissedClassRequest, ...prev].slice(0, 3));
         
         // Reset form
         setSelectedClasses([]);
@@ -157,9 +170,6 @@ export default function StudentDashboardPage() {
         setSelectedEvent(undefined);
         setSelectedApprover(undefined);
         setOtherApproverName('');
-        
-        // Refresh data on page
-        fetchStudentData();
     } catch (error) {
         console.error("Error submitting request:", error);
         toast({ title: "Submission Failed", description: "Could not submit your request.", variant: "destructive"});
@@ -191,6 +201,10 @@ export default function StudentDashboardPage() {
     return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   };
 
+  if (!currentUser) {
+      return null;
+  }
+  
   return (
     <div className="space-y-8">
       <Card className="shadow-lg rounded-xl overflow-hidden">
@@ -223,7 +237,7 @@ export default function StudentDashboardPage() {
                         <Label htmlFor={`class-${entry.id}`} className="flex-grow cursor-pointer">
                           <span className="block font-semibold">{entry.subjectName}</span>
                           <span className="block text-sm text-muted-foreground">{entry.timeSlot}</span>
-                          <span className="block text-xs text-muted-foreground">Prof. {entry.facultyName}</span>
+                          <span className="block text-xs text-muted-foreground">Prof. {entry.facultyName || 'N/A'}</span>
                         </Label>
                       </div>
                     ))}
@@ -316,7 +330,7 @@ export default function StudentDashboardPage() {
             </div>
           ) : studentRequests.length > 0 ? (
             <ul className="space-y-4">
-              {studentRequests.map(req => ( // Show 3 most recent
+              {studentRequests.map(req => ( 
                 <li key={req.id} className="p-4 border rounded-md bg-background/70 shadow-sm">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
                     <div className="flex-grow">
@@ -354,5 +368,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    

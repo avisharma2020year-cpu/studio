@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useEffect, ChangeEvent, useRef } from 'react';
 import { Button } from "@/components/ui/button";
@@ -115,9 +114,13 @@ export default function AdminTimetablesPage() {
   };
 
   const handleSubmit = async () => {
-    if (!formData.day || !formData.timeSlot || !formData.subjectName || !formData.facultyId || !formData.course || !formData.semester) {
-      toast({ title: "Error", description: "All fields are required.", variant: "destructive" });
-      return;
+    // Basic validation
+    const requiredFields = ['day', 'timeSlot', 'subjectName', 'course', 'semester'];
+    for (const field of requiredFields) {
+        if (!formData[field as keyof typeof formData]) {
+             toast({ title: "Error", description: `Field '${field}' is required.`, variant: "destructive" });
+             return;
+        }
     }
 
     setIsLoading(true);
@@ -159,6 +162,9 @@ export default function AdminTimetablesPage() {
   
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // Reset file input
+    }
     if (!file) return;
 
     if (file.type !== "text/csv") {
@@ -177,10 +183,11 @@ export default function AdminTimetablesPage() {
           
           if (newEntries.length === 0) {
             toast({ 
-              title: "Upload Complete", 
-              description: `No new valid entries were found to add. ${skipped > 0 ? `${skipped} rows were skipped due to missing or invalid data.` : ''}`, 
+              title: "Upload Failed", 
+              description: `No valid entries were found to save. ${skipped > 0 ? `${skipped} rows were skipped due to missing or invalid data.` : 'Please check the file format.'}`, 
               variant: "destructive" 
             });
+            setIsUploading(false);
             return;
           }
           
@@ -192,11 +199,11 @@ export default function AdminTimetablesPage() {
           });
           await batch.commit();
 
-          let description = `Timetable uploaded and ${newEntries.length} entries saved successfully.`;
+          let description = `${newEntries.length} entries saved successfully.`;
           if (skipped > 0) {
-            description += ` ${skipped} rows were skipped.`;
+            description += ` ${skipped} invalid rows were skipped.`;
           }
-          toast({ title: "Success", description });
+          toast({ title: "Upload Complete", description });
           await fetchTimetableData();
         } catch (error) {
           console.error("Error processing timetable:", error);
@@ -207,9 +214,6 @@ export default function AdminTimetablesPage() {
           toast({ title: "Upload Failed", description: errorMessage, variant: "destructive" });
         } finally {
           setIsUploading(false);
-          if(fileInputRef.current) {
-            fileInputRef.current.value = "";
-          }
         }
       },
       error: (error) => {
@@ -302,7 +306,7 @@ export default function AdminTimetablesPage() {
                     <TableCell>{entry.day}</TableCell>
                     <TableCell>{entry.timeSlot}</TableCell>
                     <TableCell className="font-medium">{entry.subjectName}</TableCell>
-                    <TableCell>{entry.facultyName}</TableCell>
+                    <TableCell>{entry.facultyName || 'N/A'}</TableCell>
                     <TableCell>{entry.course}</TableCell>
                     <TableCell>{entry.semester}</TableCell>
                     <TableCell className="text-right space-x-2">
@@ -356,9 +360,10 @@ export default function AdminTimetablesPage() {
               <Label htmlFor="facultyId" className="text-right">Faculty</Label>
               <Select value={formData.facultyId} onValueChange={(value) => handleSelectChange('facultyId', value)}>
                 <SelectTrigger id="facultyId" className="col-span-3">
-                  <SelectValue placeholder="Select faculty" />
+                  <SelectValue placeholder="Select faculty (optional)" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="">None</SelectItem>
                   {facultyList.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>

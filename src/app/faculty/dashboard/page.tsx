@@ -1,10 +1,9 @@
-
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { getCurrentUser } from '@/data/mock-data';
+import { useAuth } from '@/hooks/use-auth';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } from 'lucide-react';
@@ -12,11 +11,11 @@ import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 export default function FacultyDashboardPage() {
   const { toast } = useToast();
-  const currentUser = getCurrentUser('faculty');
+  const { user: currentUser } = useAuth();
 
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
   const [comments, setComments] = useState<Record<string, string>>({}); // { requestId: comment }
@@ -24,11 +23,8 @@ export default function FacultyDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchFacultyData = async () => {
+    if (!currentUser?.id) return;
     setIsLoading(true);
-    if (!currentUser?.id) {
-        setIsLoading(false);
-        return;
-    }
     try {
         const requestsQuery = query(
             collection(db, "requests"),
@@ -36,7 +32,8 @@ export default function FacultyDashboardPage() {
             where("status", "==", "Pending")
         );
         const requestsSnapshot = await getDocs(requestsQuery);
-        setRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
+        const requestData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+        setRequests(requestData);
 
         const eventsSnapshot = await getDocs(collection(db, "events"));
         setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
@@ -49,8 +46,10 @@ export default function FacultyDashboardPage() {
   };
 
   useEffect(() => {
-    fetchFacultyData();
-  }, []);
+    if (currentUser) {
+        fetchFacultyData();
+    }
+  }, [currentUser]);
 
   const handleUpdateRequestStatus = async (requestId: string, status: 'Approved' | 'Rejected') => {
     const comment = comments[requestId] || '';
@@ -59,6 +58,7 @@ export default function FacultyDashboardPage() {
       return;
     }
 
+    setIsLoading(true);
     try {
         const requestDocRef = doc(db, "requests", requestId);
         await updateDoc(requestDocRef, {
@@ -66,10 +66,12 @@ export default function FacultyDashboardPage() {
             facultyComment: comment
         });
         toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
-        fetchFacultyData(); // Refresh the list
+        await fetchFacultyData(); // Refresh the list
     } catch (error) {
         console.error("Error updating request:", error);
         toast({ title: "Error", description: "Could not update the request status.", variant: "destructive"});
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -83,7 +85,7 @@ export default function FacultyDashboardPage() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-3xl font-headline flex items-center"><Inbox className="mr-3 h-8 w-8 text-primary" />Absence Requests for Approval</CardTitle>
-          <CardDescription>Review pending absence requests from students assigned to you.</CardDescription>
+          <CardDescription>Review pending absence requests assigned to you.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -128,14 +130,15 @@ export default function FacultyDashboardPage() {
                           onChange={(e) => setComments(prev => ({ ...prev, [req.id]: e.target.value }))}
                           placeholder="Add a comment..."
                           className="mt-1 min-h-[80px] bg-background"
+                          disabled={isLoading}
                         />
                       </div>
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-3 pt-4 border-t mt-auto">
-                      <Button variant="outline" onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="text-red-600 border-red-500 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300">
+                      <Button variant="outline" onClick={() => handleUpdateRequestStatus(req.id, 'Rejected')} className="text-red-600 border-red-500 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-400 dark:hover:bg-red-900/50 dark:hover:text-red-300" disabled={isLoading}>
                         <X className="mr-2 h-4 w-4" /> Reject
                       </Button>
-                      <Button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-green-950">
+                      <Button onClick={() => handleUpdateRequestStatus(req.id, 'Approved')} className="bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-green-950" disabled={isLoading}>
                         <Check className="mr-2 h-4 w-4" /> Approve
                       </Button>
                     </CardFooter>
@@ -151,5 +154,3 @@ export default function FacultyDashboardPage() {
     </div>
   );
 }
-
-    

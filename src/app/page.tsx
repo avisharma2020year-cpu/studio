@@ -4,33 +4,34 @@ import { Button } from "@/components/ui/button";
 import AppLogo from '@/components/shared/AppLogo';
 import { Users, UserCheck, ShieldCheck, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
+import type { UserRole } from '@/lib/types';
 
 export default function HomePage() {
-  const portals = [
+  const portals: { role: UserRole, title: string, description: string, href: string, icon: JSX.Element, image: string, imageHint: string }[] = [
     {
-      role: 'Student',
+      role: 'student',
       icon: <Users className="h-10 w-10 text-primary" />,
       title: 'Student Portal',
       description: 'Access your timetable, submit absence requests, and track their status.',
-      href: '/student/dashboard',
+      href: '/login?role=student',
       image: 'https://placehold.co/600x400.png',
       imageHint: 'students classroom'
     },
     {
-      role: 'Faculty',
+      role: 'faculty',
       icon: <UserCheck className="h-10 w-10 text-primary" />,
       title: 'Faculty Portal',
       description: 'Review and manage absence requests for your assigned subjects.',
-      href: '/faculty/dashboard',
+      href: '/login?role=faculty',
       image: 'https://placehold.co/600x400.png',
       imageHint: 'teacher lecture'
     },
     {
-      role: 'Admin',
+      role: 'admin',
       icon: <ShieldCheck className="h-10 w-10 text-primary" />,
       title: 'Admin Dashboard',
       description: 'Manage users, timetables, events, and view system-wide request logs.',
-      href: '/admin/dashboard',
+      href: '/login?role=admin',
       image: 'https://placehold.co/600x400.png',
       imageHint: 'admin dashboard'
     },
@@ -75,7 +76,7 @@ export default function HomePage() {
                 </CardDescription>
                 <Button asChild className="mt-auto w-full group bg-primary hover:bg-primary/90 text-primary-foreground">
                   <Link href={portal.href}>
-                    Go to {portal.role} Portal <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                    Login as {portal.title.split(' ')[0]} <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
                   </Link>
                 </Button>
               </CardContent>
