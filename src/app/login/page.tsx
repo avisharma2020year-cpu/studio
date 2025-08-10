@@ -1,8 +1,10 @@
+
 "use client";
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,6 +37,22 @@ function LoginPage() {
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   
   const role: UserRole = (searchParams.get('role') as UserRole) || 'student';
+
+  useEffect(() => {
+    // If auth is done loading and we have a user, redirect them.
+    // This handles the redirect after a successful login.
+    if (!authLoading && user) {
+        if (user.role === role) {
+             toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
+             router.push(`/${user.role}/dashboard`);
+        } else {
+            // Logged in, but trying to access the wrong role's login page
+             toast({ title: "Redirecting", description: `You are already logged in as a ${user.role}.` });
+             router.push(`/${user.role}/dashboard`);
+        }
+    }
+  }, [user, authLoading, router, toast, role]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,11 +65,9 @@ function LoginPage() {
     }
     
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // AuthProvider will handle fetching the user document and role
-      // We just need to redirect to the correct dashboard
-      toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
-      router.push(`/${role}/dashboard`);
+      // This just signs the user in. The useEffect above will handle the redirect
+      // once the user object is confirmed by the AuthProvider.
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       console.error("Login failed:", error);
       let errorMessage = "An unknown error occurred.";
@@ -169,7 +186,7 @@ function LoginPage() {
 
 export default function LoginPageWrapper() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
       <LoginPage />
     </Suspense>
   )
