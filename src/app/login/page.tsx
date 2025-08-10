@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -38,15 +38,13 @@ function LoginPage() {
   
   const role: UserRole = (searchParams.get('role') as UserRole) || 'student';
 
-  // This effect will redirect the user if they are already logged in.
-  if (!authLoading && user) {
-      router.replace(`/${user.role}/dashboard`);
-      return (
-        <div className="flex h-screen items-center justify-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-      );
-  }
+  useEffect(() => {
+    // This effect will redirect the user if they are already logged in and their data is loaded.
+    if (!authLoading && user) {
+        router.replace(`/${user.role}/dashboard`);
+    }
+  }, [user, authLoading, router]);
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +58,7 @@ function LoginPage() {
     
     try {
       // This just signs the user in. The AuthProvider will detect the change 
-      // and update the user state, triggering a redirect in the protected layouts.
+      // and update the user state. The useEffect above will trigger the redirect.
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
     } catch (error: any) {
@@ -95,6 +93,16 @@ function LoginPage() {
         setIsResetting(false);
       }
   };
+  
+  // While auth is loading and we don't know if a user is logged in, show a loader.
+  // Also, if the user object is already available, we show a loader while redirecting.
+  if (authLoading || user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
