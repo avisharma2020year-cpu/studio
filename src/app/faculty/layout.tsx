@@ -1,3 +1,4 @@
+
 "use client";
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -14,11 +15,14 @@ export default function FacultyLayout({
   const router = useRouter();
   
   useEffect(() => {
+    // Only redirect if loading is finished and there's no valid user.
     if (!loading && (!user || user.role !== 'faculty')) {
       router.replace('/login?role=faculty');
     }
   }, [user, loading, router]);
 
+  // While loading, or if the user is not yet available, show a loader.
+  // This prevents the redirect from happening before auth state is confirmed.
   if (loading || !user || user.role !== 'faculty') {
     return (
       <div className="flex h-screen items-center justify-center">

@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -38,16 +38,15 @@ function LoginPage() {
   
   const role: UserRole = (searchParams.get('role') as UserRole) || 'student';
 
-  useEffect(() => {
-    // If auth is done loading and we have a user, redirect them.
-    // This handles the redirect after a successful login.
-    if (!authLoading && user) {
-        // Redirect to the dashboard corresponding to the user's role.
-        toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
-        router.push(`/${user.role}/dashboard`);
-    }
-  }, [user, authLoading, router, toast]);
-
+  // This effect will redirect the user if they are already logged in.
+  if (!authLoading && user) {
+      router.replace(`/${user.role}/dashboard`);
+      return (
+        <div className="flex h-screen items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,9 +59,10 @@ function LoginPage() {
     }
     
     try {
-      // This just signs the user in. The useEffect above will handle the redirect
-      // once the user object is confirmed by the AuthProvider.
+      // This just signs the user in. The AuthProvider will detect the change 
+      // and update the user state, triggering a redirect in the protected layouts.
       await signInWithEmailAndPassword(auth, email, password);
+      toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
     } catch (error: any) {
       console.error("Login failed:", error);
       let errorMessage = "An unknown error occurred.";
