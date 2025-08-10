@@ -42,16 +42,11 @@ function LoginPage() {
     // If auth is done loading and we have a user, redirect them.
     // This handles the redirect after a successful login.
     if (!authLoading && user) {
-        if (user.role === role) {
-             toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
-             router.push(`/${user.role}/dashboard`);
-        } else {
-            // Logged in, but trying to access the wrong role's login page
-             toast({ title: "Redirecting", description: `You are already logged in as a ${user.role}.` });
-             router.push(`/${user.role}/dashboard`);
-        }
+        // Redirect to the dashboard corresponding to the user's role.
+        toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
+        router.push(`/${user.role}/dashboard`);
     }
-  }, [user, authLoading, router, toast, role]);
+  }, [user, authLoading, router, toast]);
 
 
   const handleLogin = async (e: React.FormEvent) => {
