@@ -7,6 +7,7 @@ import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarInset, 
 import AppLogo from "@/components/shared/AppLogo";
 import { Button } from '@/components/ui/button';
 import { Bell, UserCircle, Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function AdminLayout({
   children,
@@ -16,19 +17,20 @@ export default function AdminLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && (!user || user.role !== 'admin')) {
+      router.replace('/login?role=admin');
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user || user.role !== 'admin') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
-
-  if (!user || user.role !== 'admin') {
-    router.replace('/login?role=admin');
-    return null;
-  }
-
+  
   return (
     <SidebarProvider defaultOpen>
       <div className="flex min-h-screen">

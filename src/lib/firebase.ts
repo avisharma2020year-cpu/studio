@@ -8,12 +8,12 @@ import { getAuth } from "firebase/auth";
 // Firebase project configuration. For this demo, we will use
 // a local emulator or a mock implementation.
 const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "your-sender-id",
-  appId: "your-app-id",
+  apiKey:"AIzaSyDpPui2NWubev3xnkrNnHAhuo7FjxUT-Wk",
+  authDomain: "attendease-res4h.firebaseapp.com",
+  projectId: "attendease-res4h",
+  storageBucket: "attendease-res4h.firebasestorage.app",
+  messagingSenderId: "263796234536",
+  appId: "1:263796234536:web:cd4d4541ab3b03b468181d",
 };
 
 // Initialize Firebase

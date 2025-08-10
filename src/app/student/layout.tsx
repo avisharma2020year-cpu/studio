@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import AppHeader from "@/components/layout/AppHeader";
 import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function StudentLayout({
   children,
@@ -12,17 +13,18 @@ export default function StudentLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  if (loading) {
+  useEffect(() => {
+    if (!loading && (!user || user.role !== 'student')) {
+      router.replace('/login?role=student');
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user || user.role !== 'student') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
-  }
-
-  if (!user || user.role !== 'student') {
-    router.replace('/login?role=student');
-    return null;
   }
 
   return (
