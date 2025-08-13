@@ -1,45 +1,42 @@
-
 "use client";
-import { useState, Suspense, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { useAuth } from '@/hooks/use-auth';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, Suspense, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, LogIn, KeyRound, UserCircle } from 'lucide-react';
-import AppLogo from '@/components/shared/AppLogo';
-import type { UserRole } from '@/lib/types';
+import { Loader2, LogIn, KeyRound } from "lucide-react";
+import AppLogo from "@/components/shared/AppLogo";
+import type { UserRole } from "@/lib/types";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
+  DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [role, setRole] = useState<UserRole>("student"); // default
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
-  const [role, setRole] = useState<UserRole>('student'); // Default role
 
+  // If already logged in, send to their dashboard once auth is resolved
   useEffect(() => {
-    // This is the definitive fix for the redirect loop.
-    // It waits until the auth state is no longer loading AND a user object is present.
     if (!authLoading && user) {
       router.replace(`/${user.role}/dashboard`);
     }
@@ -47,27 +44,59 @@ function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
     if (!email || !password || !role) {
       toast({ title: "Error", description: "Please fill in all fields and select a role.", variant: "destructive" });
-      setIsLoading(false);
       return;
     }
-    
+
+    setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // The useEffect above will handle the redirect once the user object is available.
+      // 1) Sign in
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+
+      // 2) Ensure Firestore user doc exists (create if missing)
+      const userRef = doc(db, "users", cred.user.uid);
+      const snap = await getDoc(userRef);
+
+      let resolvedRole: UserRole = role;
+
+      if (!snap.exists()) {
+        // First login → create profile with the selected role
+        await setDoc(userRef, {
+          uid: cred.user.uid,
+          email: cred.user.email ?? email,
+          role: role,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const data = snap.data() as { role?: UserRole; email?: string };
+        if (data?.role && data.role !== role) {
+          resolvedRole = data.role;
+          toast({
+            title: "Role detected",
+            description: `Your account is set up as "${data.role}". Redirecting to the correct dashboard.`,
+          });
+        }
+      }
+
       toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
+
+      // 3) Redirect immediately (don’t wait only for effect)
+      router.replace(`/${resolvedRole}/dashboard`);
     } catch (error: any) {
       console.error("Login failed:", error);
-      let errorMessage = "An unknown error occurred.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = 'Invalid email or password. Please try again.';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed login attempts. Please try again later.';
+      let msg = "An unknown error occurred.";
+      if (
+        error?.code === "auth/user-not-found" ||
+        error?.code === "auth/wrong-password" ||
+        error?.code === "auth/invalid-credential"
+      ) {
+        msg = "Invalid email or password. Please try again.";
+      } else if (error?.code === "auth/too-many-requests") {
+        msg = "Too many failed login attempts. Please try again later.";
       }
-      toast({ title: "Login Failed", description: errorMessage, variant: "destructive" });
+      toast({ title: "Login Failed", description: msg, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -83,8 +112,8 @@ function LoginPage() {
       await sendPasswordResetEmail(auth, resetEmail);
       toast({ title: "Success", description: "Password reset link sent to your email." });
       setIsResetDialogOpen(false);
-      setResetEmail('');
-    } catch (error: any) {
+      setResetEmail("");
+    } catch (error) {
       console.error("Password reset failed:", error);
       toast({ title: "Error", description: "Could not send reset link. Please check the email address.", variant: "destructive" });
     } finally {
@@ -92,7 +121,7 @@ function LoginPage() {
     }
   };
 
-  // While the auth state is resolving, show a loader to prevent flashes of the login page.
+  // While auth is resolving
   if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -100,11 +129,10 @@ function LoginPage() {
       </div>
     );
   }
-  
-  // If the user is already logged in, the useEffect will redirect them.
-  // We return null here to avoid rendering the login form unnecessarily.
+
+  // If user is present, we’re redirecting in the effect; render a spinner
   if (user) {
-     return (
+    return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
@@ -116,16 +144,18 @@ function LoginPage() {
       <div className="absolute top-8">
         <AppLogo size="lg" />
       </div>
+
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-headline">Login</CardTitle>
           <CardDescription>Select your role and enter credentials to access your dashboard.</CardDescription>
         </CardHeader>
+
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select onValueChange={(val) => setRole(val as UserRole)} defaultValue={role}>
+              <Select onValueChange={(v) => setRole(v as UserRole)} defaultValue={role}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
@@ -136,6 +166,7 @@ function LoginPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -148,6 +179,7 @@ function LoginPage() {
                 disabled={isLoading}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -161,27 +193,30 @@ function LoginPage() {
               />
             </div>
           </CardContent>
+
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
               Login
             </Button>
+
             <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="link" type="button" className="text-sm font-medium">Forgot Password?</Button>
+                <Button variant="link" type="button" className="text-sm font-medium">
+                  Forgot Password?
+                </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle className="flex items-center">
-                    <KeyRound className="mr-2 h-5 w-5 text-primary" />Password Reset
+                    <KeyRound className="mr-2 h-5 w-5 text-primary" />
+                    Password Reset
                   </DialogTitle>
-                  <DialogDescription>
-                    Enter your email address and we'll send you a link to reset your password.
-                  </DialogDescription>
+                  <DialogDescription>Enter your email address and we'll send you a link to reset your password.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <Label htmlFor="reset-email">Your Email</Label>
-                  <Input 
+                  <Input
                     id="reset-email"
                     type="email"
                     placeholder="you@example.com"
@@ -208,8 +243,12 @@ function LoginPage() {
 
 export default function LoginPageWrapper() {
   return (
-    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
+    <Suspense fallback={
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    }>
       <LoginPage />
     </Suspense>
-  )
+  );
 }

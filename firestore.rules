@@ -4,55 +4,57 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user has a specific role
-    function hasRole(role) {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-    
-    // Helper function to check if a user is the owner of a document
-    function isOwner(userId) {
-      return request.auth.uid == userId;
+    function isAuth() {
+      return request.auth != null;
     }
 
-    // Users can read their own data, admins can read any
+    function isAdmin() {
+      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isFaculty() {
+        return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty';
+    }
+
+    function isStudent() {
+        return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student';
+    }
+
+    // Rules for user documents
     match /users/{userId} {
-      allow read: if isOwner(userId) || hasRole('admin');
-      allow update: if isOwner(userId); // Users can update their own profile info
-      allow create, delete: if hasRole('admin'); // Only admins can create/delete users
+      // Admins can create, read, and write any user document.
+      allow read, write: if isAdmin();
+      // Users can read and update their own document.
+      allow read, update: if isAuth() && request.auth.uid == userId;
     }
 
-    // All authenticated users can read timetables and events
-    match /timetables/{timetableId} {
-      allow read: if request.auth != null;
-      allow write: if hasRole('admin'); // Only admins can create/update/delete timetables
+    // Rules for timetable entries
+    match /timetables/{docId} {
+      // All authenticated users can read timetables.
+      allow read: if isAuth();
+      // Only admins can write (create, update, delete) timetable entries.
+      allow write: if isAdmin();
     }
-    
-    match /events/{eventId} {
-      allow read: if request.auth != null;
-      allow write: if hasRole('admin'); // Only admins can create/update/delete events
+
+    // Rules for pre-approved events
+    match /events/{docId} {
+       // All authenticated users can read events.
+      allow read: if isAuth();
+      // Only admins can write events.
+      allow write: if isAdmin();
     }
 
     // Rules for absence requests
     match /requests/{requestId} {
-      // Create: Students can create requests for themselves.
-      allow create: if hasRole('student') && request.resource.data.studentId == request.auth.uid;
-
-      // Read:
-      // - Students can read their own requests.
-      // - Faculty can read requests assigned to them.
-      // - Admins can read all requests.
-      allow read: if (hasRole('student') && resource.data.studentId == request.auth.uid) || 
-                   (hasRole('faculty') && resource.data.facultyId == request.auth.uid) ||
-                   (hasRole('admin'));
-
-      // Update:
-      // - Faculty can update (approve/reject) requests assigned to them.
-      // - Admins can update any request.
-      allow update: if (hasRole('faculty') && resource.data.facultyId == request.auth.uid) ||
-                     hasRole('admin');
+       // Admins can read and write any request.
+      allow read, write: if isAdmin();
       
-      // Delete: Only admins can delete requests
-      allow delete: if hasRole('admin');
+      // Students can create requests for themselves and read their own requests.
+      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
+      allow read: if isStudent() && resource.data.studentId == request.auth.uid;
+      
+      // Faculty can read and update requests assigned to them.
+      allow read, update: if isFaculty() && resource.data.facultyId == request.auth.uid;
     }
   }
 }
