@@ -1,7 +1,7 @@
 
 "use client";
 import { useState, Suspense, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/hooks/use-auth';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, LogIn, KeyRound } from 'lucide-react';
+import { Loader2, LogIn, KeyRound, UserCircle } from 'lucide-react';
 import AppLogo from '@/components/shared/AppLogo';
 import type { UserRole } from '@/lib/types';
 import {
@@ -21,11 +21,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   
@@ -35,31 +35,29 @@ function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
-  
-  const role: UserRole = (searchParams.get('role') as UserRole) || 'student';
+  const [role, setRole] = useState<UserRole>('student'); // Default role
 
   useEffect(() => {
-    // This effect will redirect the user if they are already logged in and their data is loaded.
+    // This is the definitive fix for the redirect loop.
+    // It waits until the auth state is no longer loading AND a user object is present.
     if (!authLoading && user) {
-        router.replace(`/${user.role}/dashboard`);
+      router.replace(`/${user.role}/dashboard`);
     }
   }, [user, authLoading, router]);
-
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!email || !password) {
-        toast({ title: "Error", description: "Email and password are required.", variant: "destructive" });
-        setIsLoading(false);
-        return;
+    if (!email || !password || !role) {
+      toast({ title: "Error", description: "Please fill in all fields and select a role.", variant: "destructive" });
+      setIsLoading(false);
+      return;
     }
     
     try {
-      // This just signs the user in. The AuthProvider will detect the change 
-      // and update the user state. The useEffect above will trigger the redirect.
       await signInWithEmailAndPassword(auth, email, password);
+      // The useEffect above will handle the redirect once the user object is available.
       toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
     } catch (error: any) {
       console.error("Login failed:", error);
@@ -74,50 +72,70 @@ function LoginPage() {
       setIsLoading(false);
     }
   };
-  
+
   const handlePasswordReset = async () => {
-      if (!resetEmail) {
-        toast({ title: "Error", description: "Please enter your email address.", variant: "destructive" });
-        return;
-      }
-      setIsResetting(true);
-      try {
-        await sendPasswordResetEmail(auth, resetEmail);
-        toast({ title: "Success", description: "Password reset link sent to your email." });
-        setIsResetDialogOpen(false);
-        setResetEmail('');
-      } catch (error: any) {
-         console.error("Password reset failed:", error);
-         toast({ title: "Error", description: "Could not send reset link. Please check the email address.", variant: "destructive" });
-      } finally {
-        setIsResetting(false);
-      }
+    if (!resetEmail) {
+      toast({ title: "Error", description: "Please enter your email address.", variant: "destructive" });
+      return;
+    }
+    setIsResetting(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      toast({ title: "Success", description: "Password reset link sent to your email." });
+      setIsResetDialogOpen(false);
+      setResetEmail('');
+    } catch (error: any) {
+      console.error("Password reset failed:", error);
+      toast({ title: "Error", description: "Could not send reset link. Please check the email address.", variant: "destructive" });
+    } finally {
+      setIsResetting(false);
+    }
   };
-  
-  // While auth is loading and we don't know if a user is logged in, show a loader.
-  // Also, if the user object is already available, we show a loader while redirecting.
-  if (authLoading || user) {
+
+  // While the auth state is resolving, show a loader to prevent flashes of the login page.
+  if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
+  // If the user is already logged in, the useEffect will redirect them.
+  // We return null here to avoid rendering the login form unnecessarily.
+  if (user) {
+     return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
-       <div className="absolute top-8">
-            <AppLogo size="lg" />
-       </div>
+      <div className="absolute top-8">
+        <AppLogo size="lg" />
+      </div>
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-headline">
-            {role.charAt(0).toUpperCase() + role.slice(1)} Login
-          </CardTitle>
-          <CardDescription>Enter your credentials to access your dashboard.</CardDescription>
+          <CardTitle className="text-3xl font-headline">Login</CardTitle>
+          <CardDescription>Select your role and enter credentials to access your dashboard.</CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select onValueChange={(val) => setRole(val as UserRole)} defaultValue={role}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="faculty">Faculty</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -148,44 +166,45 @@ function LoginPage() {
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
               Login
             </Button>
-             <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
-                <DialogTrigger asChild>
-                    <Button variant="link" type="button" className="text-sm font-medium">Forgot Password?</Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center"><KeyRound className="mr-2 h-5 w-5 text-primary"/>Password Reset</DialogTitle>
-                        <DialogDescription>
-                            Enter your email address and we'll send you a link to reset your password.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <Label htmlFor="reset-email">Your Email</Label>
-                        <Input 
-                            id="reset-email"
-                            type="email"
-                            placeholder="you@example.com"
-                            value={resetEmail}
-                            onChange={(e) => setResetEmail(e.target.value)}
-                            disabled={isResetting}
-                        />
-                    </div>
-                    <DialogFooter>
-                         <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>Cancel</Button>
-                         <Button onClick={handlePasswordReset} disabled={isResetting}>
-                            {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Send Reset Link
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-             </Dialog>
+            <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="link" type="button" className="text-sm font-medium">Forgot Password?</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center">
+                    <KeyRound className="mr-2 h-5 w-5 text-primary" />Password Reset
+                  </DialogTitle>
+                  <DialogDescription>
+                    Enter your email address and we'll send you a link to reset your password.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <Label htmlFor="reset-email">Your Email</Label>
+                  <Input 
+                    id="reset-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    disabled={isResetting}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handlePasswordReset} disabled={isResetting}>
+                    {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Send Reset Link
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardFooter>
         </form>
       </Card>
     </div>
   );
 }
-
 
 export default function LoginPageWrapper() {
   return (
