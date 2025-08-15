@@ -1,6 +1,6 @@
 "use client";
 import { useState, Suspense, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/use-auth";
@@ -19,24 +19,23 @@ import {
   DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetEmail, setResetEmail] = useState("");
-  const [role, setRole] = useState<UserRole>("student"); // default
+  const [role, setRole] = useState<UserRole | "">((searchParams.get('role') as UserRole) || "student");
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
 
-  // If already logged in, send to their dashboard once auth is resolved
   useEffect(() => {
+    // If auth is resolved and a user is logged in, redirect them to their dashboard.
     if (!authLoading && user) {
       router.replace(`/${user.role}/dashboard`);
     }
@@ -51,39 +50,13 @@ function LoginPage() {
 
     setIsLoading(true);
     try {
-      // 1) Sign in
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-
-      // 2) Ensure Firestore user doc exists (create if missing)
-      const userRef = doc(db, "users", cred.user.uid);
-      const snap = await getDoc(userRef);
-
-      let resolvedRole: UserRole = role;
-
-      if (!snap.exists()) {
-        // First login → create profile with the selected role
-        await setDoc(userRef, {
-          uid: cred.user.uid,
-          email: cred.user.email ?? email,
-          role: role,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        const data = snap.data() as { role?: UserRole; email?: string };
-        if (data?.role && data.role !== role) {
-          resolvedRole = data.role;
-          toast({
-            title: "Role detected",
-            description: `Your account is set up as "${data.role}". Redirecting to the correct dashboard.`,
-          });
-        }
-      }
+      // Step 1: Sign in the user with Firebase Auth.
+      // The AuthProvider will automatically handle fetching/creating the Firestore user document.
+      await signInWithEmailAndPassword(auth, email, password);
 
       toast({ title: "Login Successful", description: "Redirecting to your dashboard..." });
+      // The useEffect hook will handle the redirect once the user state is updated.
 
-      // 3) Redirect immediately (don’t wait only for effect)
-      router.replace(`/${resolvedRole}/dashboard`);
     } catch (error: any) {
       console.error("Login failed:", error);
       let msg = "An unknown error occurred.";
@@ -121,17 +94,8 @@ function LoginPage() {
     }
   };
 
-  // While auth is resolving
-  if (authLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  // If user is present, we’re redirecting in the effect; render a spinner
-  if (user) {
+  // While auth is resolving, or if a user is found (and redirect is imminent)
+  if (authLoading || user) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -155,7 +119,7 @@ function LoginPage() {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select onValueChange={(v) => setRole(v as UserRole)} defaultValue={role}>
+              <Select onValueChange={(v) => setRole(v as UserRole)} value={role}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>

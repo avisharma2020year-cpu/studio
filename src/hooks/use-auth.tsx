@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { User as AppUser } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
@@ -30,14 +30,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const userDocRef = doc(db, 'users', fbUser.uid);
           const userDoc = await getDoc(userDocRef);
+          
           if (userDoc.exists()) {
             setUser({ id: userDoc.id, ...userDoc.data() } as AppUser);
           } else {
-            // This case might happen if user exists in Auth but not Firestore
-            setUser(null); 
+            // User exists in Auth but not in Firestore, likely first login.
+            // Create a default 'student' profile. Admin can change role later.
+            const newUser: Omit<AppUser, 'id'> = {
+              name: fbUser.displayName || fbUser.email || 'New User',
+              email: fbUser.email!,
+              role: 'student', // Default role
+            };
+            await setDoc(userDocRef, newUser);
+            setUser({ id: fbUser.uid, ...newUser } as AppUser);
           }
         } catch (error) {
-          console.error("Error fetching user data from Firestore:", error);
+          console.error("Error fetching or creating user data from Firestore:", error);
           setUser(null);
         }
       } else {
@@ -51,14 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value = { user, firebaseUser, loading };
 
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
+  // Render children immediately, layouts will handle loading state
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

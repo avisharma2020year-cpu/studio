@@ -15,14 +15,17 @@ export default function StudentLayout({
   const router = useRouter();
 
   useEffect(() => {
-    // Only redirect if loading is finished and there's no valid user.
-    if (!loading && (!user || user.role !== 'student')) {
-      router.replace('/login?role=student');
+    // Wait until loading is finished before checking for user
+    if (!loading) {
+      if (!user || user.role !== 'student') {
+        // If no user or wrong role, redirect to login
+        router.replace('/login?role=student');
+      }
     }
   }, [user, loading, router]);
 
-  // While loading, or if the user is not yet available, show a loader.
-  // This prevents the redirect from happening before auth state is confirmed.
+  // While loading, or if the user is not a student, show a loader.
+  // This prevents content flashing before the redirect happens.
   if (loading || !user || user.role !== 'student') {
     return (
       <div className="flex h-screen items-center justify-center">
