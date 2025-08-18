@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -84,14 +85,19 @@ export default function StudentDashboardPage() {
           const facultySnapshot = await getDocs(facultyQuery);
           setApproverList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
           
+          // Fetch requests, then sort on the client-side
           const requestsQuery = query(
             collection(db, "requests"), 
-            where("studentId", "==", currentUser.id),
-            orderBy("timestamp", "desc"),
-            limit(3)
+            where("studentId", "==", currentUser.id)
+            // Note: orderBy('timestamp') was removed to avoid needing a composite index
           );
           const requestsSnapshot = await getDocs(requestsQuery);
-          setStudentRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
+          const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+          
+          // Sort client-side and take the most recent 3
+          const sortedRequests = requestsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setStudentRequests(sortedRequests.slice(0, 3));
+
 
       } catch (error) {
           console.error("Error fetching student data:", error);
@@ -162,7 +168,9 @@ export default function StudentDashboardPage() {
         
         // Refresh recent requests
         const newReqDoc = { id: docRef.id, ...newRequest };
-        setStudentRequests(prev => [newReqDoc as MissedClassRequest, ...prev].slice(0, 3));
+        setStudentRequests(prev => [newReqDoc as MissedClassRequest, ...prev]
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 3));
         
         // Reset form
         setSelectedClasses([]);
@@ -368,3 +376,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    

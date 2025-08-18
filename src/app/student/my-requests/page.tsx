@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,11 +33,14 @@ export default function MyRequestsPage() {
       try {
         const requestsQuery = query(
           collection(db, "requests"),
-          where("studentId", "==", currentUser.id),
-          orderBy("timestamp", "desc")
+          where("studentId", "==", currentUser.id)
+          // Note: orderBy('timestamp') was removed to avoid needing a composite index
         );
         const requestsSnapshot = await getDocs(requestsQuery);
-        setRequests(requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest)));
+        const requestData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+
+        // Sort on the client side
+        setRequests(requestData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
 
         const eventsSnapshot = await getDocs(collection(db, "events"));
         setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
@@ -153,3 +157,5 @@ export default function MyRequestsPage() {
     </div>
   );
 }
+
+    
