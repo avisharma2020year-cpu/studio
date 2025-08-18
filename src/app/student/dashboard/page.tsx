@@ -30,14 +30,6 @@ const groupTimetableByDay = (timetable: TimetableEntry[]) => {
 
 const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-const facultyApprovers = [
-    "Ravi Sir",
-    "Rajinikanth Sir",
-    "Disha Ma’am",
-    "Syed Sir",
-    "Ishaq Sir",
-    "Meera Ma’am"
-];
 
 export default function StudentDashboardPage() {
   const { toast } = useToast();
@@ -80,21 +72,17 @@ export default function StudentDashboardPage() {
           const eventsSnapshot = await getDocs(collection(db, "events"));
           setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
 
-          // Fetch only the specific faculty members for the dropdown
-          const facultyQuery = query(collection(db, "users"), where("name", "in", facultyApprovers));
+          const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
           const facultySnapshot = await getDocs(facultyQuery);
           setApproverList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
           
-          // Fetch requests, then sort on the client-side
           const requestsQuery = query(
             collection(db, "requests"), 
             where("studentId", "==", currentUser.id)
-            // Note: orderBy('timestamp') was removed to avoid needing a composite index
           );
           const requestsSnapshot = await getDocs(requestsQuery);
           const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
           
-          // Sort client-side and take the most recent 3
           const sortedRequests = requestsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           setStudentRequests(sortedRequests.slice(0, 3));
 
@@ -376,5 +364,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    
