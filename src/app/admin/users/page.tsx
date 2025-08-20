@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -167,9 +168,11 @@ export default function AdminUsersPage() {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (user.prn && user.prn.toLowerCase().includes(searchTerm.toLowerCase()));
+    const safeSearchTerm = searchTerm.toLowerCase();
+    const matchesSearch = 
+      (user.name && user.name.toLowerCase().includes(safeSearchTerm)) ||
+      (user.email && user.email.toLowerCase().includes(safeSearchTerm)) ||
+      (user.prn && user.prn.toLowerCase().includes(safeSearchTerm));
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     return matchesSearch && matchesRole;
   });
