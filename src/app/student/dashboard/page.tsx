@@ -30,6 +30,15 @@ const groupTimetableByDay = (timetable: TimetableEntry[]) => {
 
 const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+const staticApprovers = [
+  { id: 'Dr. Ravi Kiran', name: 'Dr. Ravi Kiran' },
+  { id: 'Dr. Ishaq Ahmed Dar', name: 'Dr. Ishaq Ahmed Dar' },
+  { id: 'Dr. Rajnikanth', name: 'Dr. Rajnikanth' },
+  { id: 'Dr. Disha Pathak', name: 'Dr. Disha Pathak' },
+  { id: 'Dr. Meera', name: 'Dr. Meera' },
+  { id: 'Dr. Syed Masroor', name: 'Dr. Syed Masroor' },
+];
+
 
 export default function StudentDashboardPage() {
   const { toast } = useToast();
@@ -39,8 +48,7 @@ export default function StudentDashboardPage() {
   const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
   const [allTimetableEntries, setAllTimetableEntries] = useState<TimetableEntry[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
-  const [approverList, setApproverList] = useState<User[]>([]);
-
+  
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [reason, setReason] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<string | undefined>(undefined);
@@ -52,40 +60,42 @@ export default function StudentDashboardPage() {
   useEffect(() => {
     const fetchStudentData = async () => {
       if (!currentUser?.course || !currentUser?.semester) {
-          toast({ title: "Profile Incomplete", description: "Your course and semester are not set. Please contact an admin.", variant: "destructive" });
+          // Temporarily disable this toast as we removed auth
+          // toast({ title: "Profile Incomplete", description: "Your course and semester are not set. Please contact an admin.", variant: "destructive" });
           setIsLoading(false);
-          return;
+          // return; // Don't return to allow dummy data loading
       }
       setIsLoading(true);
       try {
-          const timetableQuery = query(
-              collection(db, "timetables"),
-              where("course", "==", currentUser.course),
-              where("semester", "==", currentUser.semester)
-          );
-          const timetableSnapshot = await getDocs(timetableQuery);
-          const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
-          
-          setAllTimetableEntries(userTimetable);
-          setTimetable(groupTimetableByDay(userTimetable));
+          // If no current user, we can't fetch their specific data
+          if (currentUser) {
+            const timetableQuery = query(
+                collection(db, "timetables"),
+                where("course", "==", currentUser.course),
+                where("semester", "==", currentUser.semester)
+            );
+            const timetableSnapshot = await getDocs(timetableQuery);
+            const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+            
+            setAllTimetableEntries(userTimetable);
+            setTimetable(groupTimetableByDay(userTimetable));
+            
+            const requestsQuery = query(
+              collection(db, "requests"), 
+              where("studentId", "==", currentUser.id)
+            );
+            const requestsSnapshot = await getDocs(requestsQuery);
+            const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+            
+            const sortedRequests = requestsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            setStudentRequests(sortedRequests.slice(0, 3));
+          } else {
+            // For development without auth, we can leave timetable empty or load a default one.
+            // For now, it will just show "Your timetable is not yet available."
+          }
 
           const eventsSnapshot = await getDocs(collection(db, "events"));
           setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
-
-          const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
-          const facultySnapshot = await getDocs(facultyQuery);
-          setApproverList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-          
-          const requestsQuery = query(
-            collection(db, "requests"), 
-            where("studentId", "==", currentUser.id)
-          );
-          const requestsSnapshot = await getDocs(requestsQuery);
-          const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
-          
-          const sortedRequests = requestsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          setStudentRequests(sortedRequests.slice(0, 3));
-
 
       } catch (error) {
           console.error("Error fetching student data:", error);
@@ -94,10 +104,9 @@ export default function StudentDashboardPage() {
           setIsLoading(false);
       }
     };
-    if (currentUser) {
-      fetchStudentData();
-    }
-  }, [currentUser, toast]);
+    // No longer dependent on currentUser to run
+    fetchStudentData();
+  }, [toast, currentUser]); // Keep currentUser dependency to refetch if they log in
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev =>
@@ -106,7 +115,12 @@ export default function StudentDashboardPage() {
   };
 
   const handleSubmitRequest = async () => {
-    if (!currentUser) return;
+    // Since auth is removed, we'll create a dummy user for the request
+    const dummyUser = {
+      id: currentUser?.id || 'dummy-student-id',
+      name: currentUser?.name || 'Test Student',
+      prn: currentUser?.prn || 'DUMMY001',
+    };
 
     if (selectedClasses.length === 0) {
       toast({ title: "Error", description: "Please select at least one class.", variant: "destructive" });
@@ -132,14 +146,14 @@ export default function StudentDashboardPage() {
       return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day };
     });
 
-    const approver = approverList.find(a => a.id === selectedApprover);
+    const approver = staticApprovers.find(a => a.id === selectedApprover);
     const approverName = selectedApprover === 'other' ? otherApproverName : approver?.name;
-    const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
+    const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover; // For routing, can be name
 
     const newRequest: Omit<MissedClassRequest, 'id'> = {
-        studentId: currentUser.id,
-        studentName: currentUser.name,
-        studentPrn: currentUser.prn!,
+        studentId: dummyUser.id,
+        studentName: dummyUser.name,
+        studentPrn: dummyUser.prn,
         missedClasses: selectedClassDetails,
         reason,
         eventId: selectedEvent || '',
@@ -196,17 +210,17 @@ export default function StudentDashboardPage() {
     if (!eventId) return 'N/A';
     return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   };
-
-  if (!currentUser) {
-      return null;
-  }
   
+  const studentInfo = currentUser 
+    ? `Your course: ${currentUser.course}, Semester: ${currentUser.semester}.`
+    : "You are in development mode.";
+
   return (
     <div className="space-y-8">
       <Card className="shadow-lg rounded-xl overflow-hidden">
         <CardHeader className="bg-muted/30">
           <CardTitle className="text-3xl font-headline flex items-center"><CalendarDays className="mr-3 h-8 w-8 text-primary" />Weekly Timetable</CardTitle>
-          <CardDescription>Select classes you missed and submit an absence request below. Your course: {currentUser.course}, Semester: {currentUser.semester}.</CardDescription>
+          <CardDescription>Select classes you missed and submit an absence request below. {studentInfo}</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           {isLoading ? (
@@ -284,7 +298,7 @@ export default function StudentDashboardPage() {
                     <SelectValue placeholder="Select a faculty member..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {approverList.map(approver => (
+                    {staticApprovers.map(approver => (
                         <SelectItem key={approver.id} value={approver.id}>{approver.name}</SelectItem>
                     ))}
                      <SelectItem value="other">Other (Admin/Warden)</SelectItem>
