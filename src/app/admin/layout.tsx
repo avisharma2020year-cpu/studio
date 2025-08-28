@@ -1,43 +1,17 @@
 
 "use client";
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
 import AppHeader from "@/components/layout/AppHeader";
 import AdminSidebarNav from "@/components/layout/AdminSidebarNav";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarTrigger, SidebarFooter } from "@/components/ui/sidebar";
 import AppLogo from "@/components/shared/AppLogo";
 import { Button } from '@/components/ui/button';
-import { Bell, UserCircle, Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { Bell } from 'lucide-react';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    // Wait until loading is finished before checking for user
-    if (!loading) {
-      if (!user || user.role !== 'admin') {
-        // If no user or wrong role, redirect to login
-        router.replace('/login?role=admin');
-      }
-    }
-  }, [user, loading, router]);
-
-  // While loading, or if the user is not an admin, show a loader.
-  // This prevents content flashing before the redirect happens.
-  if (loading || !user || user.role !== 'admin') {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-  
   return (
     <SidebarProvider defaultOpen>
       <div className="flex min-h-screen">

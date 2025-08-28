@@ -1,39 +1,12 @@
 
 "use client";
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
 import AppHeader from "@/components/layout/AppHeader";
-import { Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
 
 export default function FacultyLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  
-  useEffect(() => {
-    // Wait until loading is finished before checking for user
-    if (!loading) {
-       if (!user || user.role !== 'faculty') {
-        // If no user or wrong role, redirect to login
-        router.replace('/login?role=faculty');
-      }
-    }
-  }, [user, loading, router]);
-
-  // While loading, or if the user is not a faculty member, show a loader.
-  // This prevents content flashing before the redirect happens.
-  if (loading || !user || user.role !== 'faculty') {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col min-h-screen">
       <AppHeader />
