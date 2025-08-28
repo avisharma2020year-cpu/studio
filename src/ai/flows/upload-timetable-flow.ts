@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow for processing uploaded timetable data.
@@ -35,10 +36,12 @@ const uploadTimetableFlow = ai.defineFlow(
     const usersSnapshot = await getDocs(facultyQuery);
     
     // Normalize faculty names (lowercase, trimmed) for robust matching
-    const facultyMap = new Map(usersSnapshot.docs.map(doc => {
-        const data = doc.data() as User;
-        return [data.name.trim().toLowerCase(), doc.id];
-    }));
+    const facultyMap = new Map(
+      usersSnapshot.docs
+        .map(doc => doc.data() as User)
+        .filter(data => typeof data.name === 'string' && data.name.trim()) // Ensure name exists and is a non-empty string
+        .map(data => [data.name.trim().toLowerCase(), data.id])
+    );
 
     const newTimetable: TimetableEntry[] = validRows.map((row, index) => {
       // Normalize faculty name from CSV for lookup
