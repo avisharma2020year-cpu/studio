@@ -155,7 +155,7 @@ export default function AdminDashboardPage() {
                 <p>{isLoading ? 'Loading user counts...' : `${stats?.totalUsers ?? 0} total users active.`}</p>
              </div>
              <div className="h-40 relative rounded-md overflow-hidden mt-2">
-                <Image src="https://picsum.photos/600/300" alt="System activity chart placeholder" layout="fill" objectFit="cover" data-ai-hint="data chart" />
+                <Image src="https://picsum.photos/600/300" alt="System activity chart placeholder" fill className="object-cover" data-ai-hint="data chart" />
              </div>
           </CardContent>
         </Card>
