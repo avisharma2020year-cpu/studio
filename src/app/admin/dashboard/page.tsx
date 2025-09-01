@@ -101,36 +101,36 @@ export default function AdminDashboardPage() {
             <CardDescription>Perform common administrative tasks quickly.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Button asChild variant="outline" size="lg" className="justify-start text-left h-auto py-3">
-              <Link href="/admin/users">
-                <Users className="mr-3 h-5 w-5 text-primary" />
+            <Button asChild variant="outline" size="lg" className="h-auto py-3">
+              <Link href="/admin/users" className="flex items-center text-left">
+                <Users className="mr-3 h-5 w-5 text-primary shrink-0" />
                 <div>
                   <p className="font-semibold">Manage Users</p>
                   <p className="text-xs text-muted-foreground">Add, edit, or remove users.</p>
                 </div>
               </Link>
             </Button>
-            <Button asChild variant="outline" size="lg" className="justify-start text-left h-auto py-3">
-              <Link href="/admin/timetables">
-                <CalendarCheck className="mr-3 h-5 w-5 text-primary" />
+            <Button asChild variant="outline" size="lg" className="h-auto py-3">
+              <Link href="/admin/timetables" className="flex items-center text-left">
+                <CalendarCheck className="mr-3 h-5 w-5 text-primary shrink-0" />
                  <div>
                   <p className="font-semibold">Manage Timetables</p>
                   <p className="text-xs text-muted-foreground">Upload or modify class schedules.</p>
                 </div>
               </Link>
             </Button>
-             <Button asChild variant="outline" size="lg" className="justify-start text-left h-auto py-3">
-              <Link href="/admin/events">
-                <CalendarCheck className="mr-3 h-5 w-5 text-primary" />
+             <Button asChild variant="outline" size="lg" className="h-auto py-3">
+              <Link href="/admin/events" className="flex items-center text-left">
+                <CalendarCheck className="mr-3 h-5 w-5 text-primary shrink-0" />
                  <div>
                   <p className="font-semibold">Manage Events</p>
                   <p className="text-xs text-muted-foreground">Add or edit pre-approved events.</p>
                 </div>
               </Link>
             </Button>
-            <Button asChild variant="outline" size="lg" className="justify-start text-left h-auto py-3">
-              <Link href="/admin/requests">
-                <BarChart className="mr-3 h-5 w-5 text-primary" />
+            <Button asChild variant="outline" size="lg" className="h-auto py-3">
+              <Link href="/admin/requests" className="flex items-center text-left">
+                <BarChart className="mr-3 h-5 w-5 text-primary shrink-0" />
                  <div>
                   <p className="font-semibold">View Request Logs</p>
                   <p className="text-xs text-muted-foreground">Monitor all absence requests.</p>
@@ -155,7 +155,7 @@ export default function AdminDashboardPage() {
                 <p>{isLoading ? 'Loading user counts...' : `${stats?.totalUsers ?? 0} total users active.`}</p>
              </div>
              <div className="h-40 relative rounded-md overflow-hidden mt-2">
-                <Image src="https://placehold.co/600x300.png" alt="System activity chart placeholder" layout="fill" objectFit="cover" data-ai-hint="data chart" />
+                <Image src="https://picsum.photos/600/300" alt="System activity chart placeholder" layout="fill" objectFit="cover" data-ai-hint="data chart" />
              </div>
           </CardContent>
         </Card>
@@ -163,5 +163,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
