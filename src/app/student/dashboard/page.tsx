@@ -14,7 +14,7 @@ import { CalendarDays, CheckCircle, Clock, ListPlus, Send, History, XCircle, Loa
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, orderBy, limit, doc } from 'firebase/firestore';
 
 // Helper to group timetable by day
 const groupTimetableByDay = (timetable: TimetableEntry[]) => {
@@ -68,13 +68,11 @@ export default function StudentDashboardPage() {
       setIsLoading(true);
       try {
           // If no current user, we can't fetch their specific data
-          if (currentUser) {
-            const timetableQuery = query(
-                collection(db, "timetables"),
-                where("course", "==", currentUser.course),
-                where("semester", "==", currentUser.semester)
-            );
-            const timetableSnapshot = await getDocs(timetableQuery);
+          if (currentUser && currentUser.semester) {
+            const semesterId = `semester-${currentUser.semester}`;
+            const classesCollectionRef = collection(db, "timetables", semesterId, "classes");
+            
+            const timetableSnapshot = await getDocs(classesCollectionRef);
             const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
             
             setAllTimetableEntries(userTimetable);
