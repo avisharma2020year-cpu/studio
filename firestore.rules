@@ -1,60 +1,118 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---------- Helper functions ----------
     function isAuth() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    function getUserDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
     }
-    
+
+    function isAdmin() {
+      return isAuth() && getUserDoc(request.auth.uid).role == 'admin';
+    }
+
     function isFaculty() {
-        return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty';
+      return isAuth() && getUserDoc(request.auth.uid).role == 'faculty';
     }
 
     function isStudent() {
-        return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student';
+      return isAuth() && getUserDoc(request.auth.uid).role == 'student';
     }
 
-    // Rules for user documents
+    // Checks if the authenticated student belongs to the same course & semester
+    // as the timetable/document being read. Used for timetable read security.
+    function studentMatchesCourseSemester(docCourse, docSemester) {
+      return isStudent() &&
+             getUserDoc(request.auth.uid).course == docCourse &&
+             getUserDoc(request.auth.uid).semester == docSemester;
+    }
+
+    // ---------- users collection ----------
     match /users/{userId} {
-      // Admins can create, read, and write any user document.
+      // Admins can read/write any user doc.
       allow read, write: if isAdmin();
-      // Users can read and update their own document.
+
+      // A signed-in user can read and update their own user document.
       allow read, update: if isAuth() && request.auth.uid == userId;
+
+      // Allow users to create their own profile (useful if sign-up flow creates doc).
+      // Creation by others only allowed to admins.
+      allow create: if isAdmin() || (isAuth() && request.auth.uid == userId);
+
+      // Deletion only allowed to admins
+      allow delete: if isAdmin();
     }
 
-    // Rules for timetable entries
-    match /timetables/{docId} {
-      // All authenticated users can read timetables.
-      allow read: if isAuth();
-      // Only admins can write (create, update, delete) timetable entries.
-      allow write: if isAdmin();
+    // ---------- timetables collection ----------
+    // Timetable documents must contain fields: course, semester (number), etc.
+    match /timetables/{timetableId} {
+      // Read:
+      // - Admins & Faculty can read all timetables.
+      // - Students may read timetables only for their own course + semester.
+      allow get, list: if isAuth() &&
+        ( isAdmin()
+          || isFaculty()
+          || studentMatchesCourseSemester(resource.data.course, resource.data.semester)
+        );
+
+      // Writes (create/update/delete) only by Admin
+      allow create, update, delete: if isAdmin();
     }
 
-    // Rules for pre-approved events
-    match /events/{docId} {
-       // All authenticated users can read events.
-      allow read: if isAuth();
-      // Only admins can write events.
-      allow write: if isAdmin();
+    // ---------- events collection ----------
+    match /events/{eventId} {
+      // Events are readable by any authenticated user
+      allow get, list: if isAuth();
+
+      // Only Admins can create/update/delete events
+      allow create, update, delete: if isAdmin();
     }
 
-    // Rules for absence requests
+    // ---------- requests collection ----------
+    // Request document structure assumed to include:
+    // studentId, studentName, studentPrn, missedClasses (array), facultyId (string or ''), reason, eventId (optional), timestamp, status
     match /requests/{requestId} {
-       // Admins can read and write any request.
-      allow read, write: if isAdmin();
-      
-      // Students can create requests for themselves and read their own requests.
-      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
-      allow read: if isStudent() && resource.data.studentId == request.auth.uid;
-      
-      // Faculty can read and update requests assigned to them.
-      allow read, update: if isFaculty() && resource.data.facultyId == request.auth.uid;
+      // Create: only students can create requests and studentId must equal their uid.
+      // Also basic validation: status should start as "Pending".
+      allow create: if isStudent()
+        && request.resource.data.studentId == request.auth.uid
+        && request.resource.data.status == "Pending"
+        && request.resource.data.missedClasses is list;
+
+      // Read:
+      // - Admins can read all requests.
+      // - Students can read their own requests.
+      // - Faculty can read requests assigned to them (facultyId == their uid).
+      allow get, list: if isAuth() && (
+          isAdmin()
+          || (isStudent() && resource.data.studentId == request.auth.uid)
+          || (isFaculty() && resource.data.facultyId == request.auth.uid)
+      );
+
+      // Update:
+      // - Admins can update any request (finalize, edit).
+      // - Faculty can update (approve/reject) only requests assigned to them.
+      //   They must remain the assigned faculty (facultyId unchanged or equal to request.auth.uid).
+      allow update: if isAuth() && (
+          isAdmin()
+          || (isFaculty()
+             && resource.data.facultyId == request.auth.uid
+             // ensure the request is still assigned to the same faculty (prevent reassign)
+             && request.resource.data.facultyId == request.auth.uid
+          )
+      );
+
+      // Delete only by admin
+      allow delete: if isAdmin();
+    }
+
+    // ---------- fallback: deny everything else ----------
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

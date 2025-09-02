@@ -109,26 +109,36 @@ export default function AdminUsersPage() {
     }
 
     setIsLoading(true);
+
+    // Sanitize data for Firestore: remove undefined fields
+    const cleanData = Object.entries(formData).reduce((acc, [key, value]) => {
+      if (value !== undefined) {
+        acc[key as keyof typeof formData] = value;
+      }
+      return acc;
+    }, {} as typeof formData);
+
+
     try {
         if (editingUser) {
             // Update user document in Firestore
             const userDocRef = doc(db, "users", editingUser.id);
-            const { id, ...updateData } = { ...formData, id: editingUser.id };
+            const { id, ...updateData } = { ...cleanData, id: editingUser.id };
             await updateDoc(userDocRef, updateData);
             toast({ title: "Success", description: "User updated successfully." });
         } else {
             // Create new user
-            if (!formData.password || formData.password.length < 6) {
+            if (!cleanData.password || cleanData.password.length < 6) {
               toast({ title: "Error", description: "A password with at least 6 characters is required for new users.", variant: "destructive" });
               setIsLoading(false);
               return;
             }
             // Create user in Firebase Auth
-            const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+            const userCredential = await createUserWithEmailAndPassword(auth, cleanData.email, cleanData.password);
             const newUserId = userCredential.user.uid;
 
             // Create user document in Firestore
-            const { password, ...userData } = formData;
+            const { password, ...userData } = cleanData;
             const userDocRef = doc(db, "users", newUserId);
             await setDoc(userDocRef, userData);
             
