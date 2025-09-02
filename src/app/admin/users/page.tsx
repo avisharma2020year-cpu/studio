@@ -77,11 +77,11 @@ export default function AdminUsersPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: name === 'semester' ? (value ? parseInt(value) : undefined) : value }));
+    setFormData(prev => ({ ...prev, [name]: name === 'semester' ? (value ? parseInt(value) : '') : value }));
   };
 
   const handleRoleChange = (value: UserRole) => {
-    setFormData(prev => ({ ...prev, role: value, prn: '', course: '', semester: undefined, subjects: [] }));
+    setFormData(prev => ({ ...prev, role: value, prn: '', course: '', semester: '', subjects: [] }));
   };
   
   const handleSubjectsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,7 +104,7 @@ export default function AdminUsersPage() {
   
   const openFormForNew = () => {
     setEditingUser(null);
-    setFormData(initialNewUserState);
+    setFormData({ ...initialNewUserState, semester: '' }); // Fix: Initialize semester to empty string
     setIsFormOpen(true);
   };
 
@@ -116,9 +116,11 @@ export default function AdminUsersPage() {
 
     setIsLoading(true);
 
-    // Sanitize data for Firestore: remove undefined fields
+    // Sanitize data for Firestore: remove undefined or empty string fields that should be numbers
     const cleanData = Object.entries(formData).reduce((acc, [key, value]) => {
-      if (value !== undefined) {
+      if (key === 'semester' && (value === undefined || value === '')) {
+        // Do not add semester if it's not set
+      } else if (value !== undefined) {
         (acc as any)[key] = value;
       }
       return acc;
@@ -200,7 +202,11 @@ export default function AdminUsersPage() {
   };
   
   if (!isClient) {
-    return null; // or a loading spinner
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
