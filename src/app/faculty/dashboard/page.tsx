@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,11 @@ export default function FacultyDashboardPage() {
   const [comments, setComments] = useState<Record<string, string>>({}); // { requestId: comment }
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const fetchFacultyData = async () => {
     if (!currentUser?.id) return;
@@ -78,6 +84,10 @@ export default function FacultyDashboardPage() {
    const getEventName = (eventId?: string) => {
     if (!eventId) return 'N/A';
     return events.find(e => e.id === eventId)?.name || 'Unknown Event';
+  }
+
+  if (!isClient) {
+    return null; // or a loading spinner
   }
 
   return (

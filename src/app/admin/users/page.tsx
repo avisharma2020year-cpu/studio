@@ -50,6 +50,12 @@ export default function AdminUsersPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<Omit<User, 'id'> & { password?: string }>(initialNewUserState);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -113,10 +119,10 @@ export default function AdminUsersPage() {
     // Sanitize data for Firestore: remove undefined fields
     const cleanData = Object.entries(formData).reduce((acc, [key, value]) => {
       if (value !== undefined) {
-        acc[key as keyof typeof formData] = value;
+        (acc as any)[key] = value;
       }
       return acc;
-    }, {} as typeof formData);
+    }, {} as Partial<typeof formData>);
 
 
     try {
@@ -134,7 +140,7 @@ export default function AdminUsersPage() {
               return;
             }
             // Create user in Firebase Auth
-            const userCredential = await createUserWithEmailAndPassword(auth, cleanData.email, cleanData.password);
+            const userCredential = await createUserWithEmailAndPassword(auth, cleanData.email!, cleanData.password);
             const newUserId = userCredential.user.uid;
 
             // Create user document in Firestore
@@ -192,6 +198,10 @@ export default function AdminUsersPage() {
     if (role === 'faculty') return 'secondary';
     return 'default'; // Student
   };
+  
+  if (!isClient) {
+    return null; // or a loading spinner
+  }
 
   return (
     <div className="space-y-6">

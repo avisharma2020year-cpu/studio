@@ -56,18 +56,19 @@ export default function StudentDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedApprover, setSelectedApprover] = useState<string | undefined>(undefined);
   const [otherApproverName, setOtherApproverName] = useState('');
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     const fetchStudentData = async () => {
       if (!currentUser?.course || !currentUser?.semester) {
-          // Temporarily disable this toast as we removed auth
-          // toast({ title: "Profile Incomplete", description: "Your course and semester are not set. Please contact an admin.", variant: "destructive" });
           setIsLoading(false);
-          // return; // Don't return to allow dummy data loading
       }
       setIsLoading(true);
       try {
-          // If no current user, we can't fetch their specific data
           if (currentUser && currentUser.semester) {
             const semesterId = `semester-${currentUser.semester}`;
             const classesCollectionRef = collection(db, "timetables", semesterId, "classes");
@@ -87,10 +88,7 @@ export default function StudentDashboardPage() {
             
             const sortedRequests = requestsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
             setStudentRequests(sortedRequests.slice(0, 3));
-          } else {
-            // For development without auth, we can leave timetable empty or load a default one.
-            // For now, it will just show "Your timetable is not yet available."
-          }
+          } 
 
           const eventsSnapshot = await getDocs(collection(db, "events"));
           setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
@@ -102,9 +100,8 @@ export default function StudentDashboardPage() {
           setIsLoading(false);
       }
     };
-    // No longer dependent on currentUser to run
     fetchStudentData();
-  }, [toast, currentUser]); // Keep currentUser dependency to refetch if they log in
+  }, [toast, currentUser]);
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev =>
@@ -113,7 +110,6 @@ export default function StudentDashboardPage() {
   };
 
   const handleSubmitRequest = async () => {
-    // Since auth is removed, we'll create a dummy user for the request
     const dummyUser = {
       id: currentUser?.id || 'dummy-student-id',
       name: currentUser?.name || 'Test Student',
@@ -146,7 +142,7 @@ export default function StudentDashboardPage() {
 
     const approver = staticApprovers.find(a => a.id === selectedApprover);
     const approverName = selectedApprover === 'other' ? otherApproverName : approver?.name;
-    const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover; // For routing, can be name
+    const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
 
     const newRequest: Omit<MissedClassRequest, 'id'> = {
         studentId: dummyUser.id,
@@ -166,13 +162,11 @@ export default function StudentDashboardPage() {
         const docRef = await addDoc(collection(db, "requests"), newRequest);
         toast({ title: "Success", description: `Absence request submitted to ${approverName}.` });
         
-        // Refresh recent requests
         const newReqDoc = { id: docRef.id, ...newRequest };
         setStudentRequests(prev => [newReqDoc as MissedClassRequest, ...prev]
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .slice(0, 3));
         
-        // Reset form
         setSelectedClasses([]);
         setReason('');
         setSelectedEvent(undefined);
@@ -212,6 +206,10 @@ export default function StudentDashboardPage() {
   const studentInfo = currentUser 
     ? `Your course: ${currentUser.course}, Semester: ${currentUser.semester}.`
     : "You are in development mode.";
+
+  if (!isClient) {
+    return null; // or a loading spinner
+  }
 
   return (
     <div className="space-y-8">
