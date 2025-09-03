@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 const daysEnum = z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);

@@ -66,29 +66,31 @@ export default function StudentDashboardPage() {
     const fetchStudentData = async () => {
       if (!currentUser?.course || !currentUser?.semester) {
           setIsLoading(false);
+          return; // Early exit if essential user data is missing
       }
       setIsLoading(true);
       try {
-          if (currentUser && currentUser.semester) {
-            const semesterId = `semester-${currentUser.semester}`;
-            const classesCollectionRef = collection(db, "timetables", semesterId, "classes");
-            
-            const timetableSnapshot = await getDocs(classesCollectionRef);
-            const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
-            
-            setAllTimetableEntries(userTimetable);
-            setTimetable(groupTimetableByDay(userTimetable));
-            
-            const requestsQuery = query(
-              collection(db, "requests"), 
-              where("studentId", "==", currentUser.id)
-            );
-            const requestsSnapshot = await getDocs(requestsQuery);
-            const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
-            
-            const sortedRequests = requestsData.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            setStudentRequests(sortedRequests.slice(0, 3));
-          } 
+          const timetableQuery = query(
+            collection(db, "timetables"),
+            where("course", "==", currentUser.course),
+            where("semester", "==", currentUser.semester)
+          );
+          
+          const timetableSnapshot = await getDocs(timetableQuery);
+          const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+          
+          setAllTimetableEntries(userTimetable);
+          setTimetable(groupTimetableByDay(userTimetable));
+          
+          const requestsQuery = query(
+            collection(db, "requests"), 
+            where("studentId", "==", currentUser.id),
+            orderBy("timestamp", "desc"),
+            limit(3)
+          );
+          const requestsSnapshot = await getDocs(requestsQuery);
+          const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+          setStudentRequests(requestsData);
 
           const eventsSnapshot = await getDocs(collection(db, "events"));
           setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
@@ -100,7 +102,9 @@ export default function StudentDashboardPage() {
           setIsLoading(false);
       }
     };
-    fetchStudentData();
+    if (currentUser) {
+        fetchStudentData();
+    }
   }, [toast, currentUser]);
 
   const handleClassSelection = (classId: string) => {
@@ -110,11 +114,10 @@ export default function StudentDashboardPage() {
   };
 
   const handleSubmitRequest = async () => {
-    const dummyUser = {
-      id: currentUser?.id || 'dummy-student-id',
-      name: currentUser?.name || 'Test Student',
-      prn: currentUser?.prn || 'DUMMY001',
-    };
+    if (!currentUser) {
+        toast({ title: "Error", description: "You must be logged in to submit a request.", variant: "destructive" });
+        return;
+    }
 
     if (selectedClasses.length === 0) {
       toast({ title: "Error", description: "Please select at least one class.", variant: "destructive" });
@@ -145,9 +148,9 @@ export default function StudentDashboardPage() {
     const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
 
     const newRequest: Omit<MissedClassRequest, 'id'> = {
-        studentId: dummyUser.id,
-        studentName: dummyUser.name,
-        studentPrn: dummyUser.prn,
+        studentId: currentUser.id,
+        studentName: currentUser.name,
+        studentPrn: currentUser.prn || 'N/A',
         missedClasses: selectedClassDetails,
         reason,
         eventId: selectedEvent || '',
@@ -205,10 +208,14 @@ export default function StudentDashboardPage() {
   
   const studentInfo = currentUser 
     ? `Your course: ${currentUser.course}, Semester: ${currentUser.semester}.`
-    : "You are in development mode.";
+    : "Loading student data...";
 
   if (!isClient) {
-    return null; // or a loading spinner
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (

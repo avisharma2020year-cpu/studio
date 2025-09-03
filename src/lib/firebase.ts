@@ -1,3 +1,4 @@
+
 // @ts-nocheck
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -8,7 +9,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDpPui2NWubev3xnkrNnHAhuo7FjxUT-Wk",
   authDomain: "attendease-res4h.firebaseapp.com",
   projectId: "attendease-res4h",
-  storageBucket: "attendease-res4h.firebasestorage.app",
+  storageBucket: "attendease-res4h.appspot.com",
   messagingSenderId: "263796234536",
   appId: "1:263796234536:web:cd4d4541ab3b03b468181d",
   measurementId: "G-DGN0LG51YE"

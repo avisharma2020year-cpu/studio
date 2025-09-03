@@ -53,5 +53,3 @@ export interface SubjectFacultyMapping {
   course: string;
   semester: number;
 }
-
-    
