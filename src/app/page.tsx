@@ -3,34 +3,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import AppLogo from "@/components/shared/AppLogo";
 import Link from "next/link";
-import { ArrowRight, UserCog, Shield, GraduationCap, type LucideProps } from "lucide-react";
-import type { ForwardRefExoticComponent, RefAttributes } from "react";
+import { ArrowRight, UserCog, Shield, GraduationCap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type Portal = {
   role: string;
   description: string;
   href: string;
-  icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
+  icon: LucideIcon;
 };
-
 
 const portals: Portal[] = [
   {
     role: "Student",
     description: "Submit and track your absence requests.",
-    href: "/student/dashboard",
+    href: "/login",
     icon: GraduationCap,
   },
   {
     role: "Faculty",
     description: "Review and approve student requests.",
-    href: "/faculty/dashboard",
+    href: "/login",
     icon: UserCog,
   },
   {
     role: "Admin",
     description: "Manage users, timetables, and system settings.",
-    href: "/admin/dashboard",
+    href: "/login",
     icon: Shield,
   },
 ];
@@ -45,7 +44,7 @@ export default function PortalSelectionPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold font-headline mb-3">Welcome to AttendEase</h1>
           <p className="text-lg text-muted-foreground max-w-2xl">
-            The smart attendance excuse system. Please select your portal to continue.
+            The smart attendance excuse system. Please select your portal to log in.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
@@ -63,7 +62,7 @@ export default function PortalSelectionPage() {
                 <CardContent className="p-6 bg-muted/40">
                   <Button asChild className="w-full text-lg py-6 group-hover:bg-primary/90 transition-colors">
                     <Link href={portal.href}>
-                      Go to Dashboard <ArrowRight className="ml-2 h-5 w-5 transform group-hover:translate-x-1 transition-transform" />
+                      Login <ArrowRight className="ml-2 h-5 w-5 transform group-hover:translate-x-1 transition-transform" />
                     </Link>
                   </Button>
                 </CardContent>

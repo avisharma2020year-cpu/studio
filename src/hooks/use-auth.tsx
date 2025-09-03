@@ -1,3 +1,4 @@
+
 "use client";
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
@@ -34,18 +35,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userDoc.exists()) {
             setUser({ id: userDoc.id, ...userDoc.data() } as AppUser);
           } else {
-            // User exists in Auth but not in Firestore, likely first login.
-            // Create a default 'student' profile. Admin can change role later.
-            const newUser: Omit<AppUser, 'id'> = {
-              name: fbUser.displayName || fbUser.email || 'New User',
-              email: fbUser.email!,
-              role: 'student', // Default role
-            };
-            await setDoc(userDocRef, newUser);
-            setUser({ id: fbUser.uid, ...newUser } as AppUser);
+            // This case should ideally not be hit in a production app
+            // without a proper registration flow.
+            console.warn("User exists in Auth, but not in Firestore. Redirecting to login.");
+            setUser(null);
           }
         } catch (error) {
-          console.error("Error fetching or creating user data from Firestore:", error);
+          console.error("Error fetching user data from Firestore:", error);
           setUser(null);
         }
       } else {
@@ -58,8 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const value = { user, firebaseUser, loading };
-
-  // Render children immediately, layouts will handle loading state
+  
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

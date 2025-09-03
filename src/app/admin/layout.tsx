@@ -1,17 +1,37 @@
 
 "use client";
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import AppHeader from "@/components/layout/AppHeader";
 import AdminSidebarNav from "@/components/layout/AdminSidebarNav";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarTrigger, SidebarFooter } from "@/components/ui/sidebar";
 import AppLogo from "@/components/shared/AppLogo";
 import { Button } from '@/components/ui/button';
-import { Bell } from 'lucide-react';
+import { Bell, Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && (!user || user.role !== 'admin')) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user || user.role !== 'admin') {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider defaultOpen>
       <div className="flex min-h-screen">

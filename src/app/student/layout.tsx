@@ -1,12 +1,33 @@
 
 "use client";
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
 import AppHeader from "@/components/layout/AppHeader";
+import { Loader2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function StudentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && (!user || user.role !== 'student')) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user || user.role !== 'student') {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      </div>
+    );
+  }
+  
   return (
     <div className="flex flex-col min-h-screen">
       <AppHeader />
