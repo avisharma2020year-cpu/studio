@@ -1,85 +1,61 @@
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import JSZip from 'jszip';
 
-const projectRoot = process.cwd();
-const outputZipPath = path.join(projectRoot, 'source-code.zip');
-
-const filesToInclude = [
-  '.env',
-  'README.md',
-  'apphosting.yaml',
-  'components.json',
-  'firebase.json',
-  'next.config.ts',
-  'package.json',
-  'src',
-  'tailwind.config.ts',
-  'tsconfig.json'
-];
-
-// Folders to explicitly exclude from the zip
-const foldersToExclude = new Set([
+// List of files and directories to ignore
+const ignoreList = [
   'node_modules',
   '.next',
   '.git',
-]);
+  'source-code.zip',
+  'package-lock.json',
+  '.DS_Store',
+];
 
-const zip = new JSZip();
+async function addFilesToZip(zip, dirPath) {
+  const dirents = await fs.readdir(dirPath, { withFileTypes: true });
 
-function addFileToZip(filePath, zipFolder) {
-  const fullPath = path.join(projectRoot, filePath);
-  if (!fs.existsSync(fullPath)) return;
-
-  const stat = fs.statSync(fullPath);
-
-  if (stat.isDirectory()) {
-    if (foldersToExclude.has(path.basename(fullPath))) {
-      return; // Skip excluded folders
+  for (const dirent of dirents) {
+    const fullPath = path.join(dirPath, dirent.name);
+    
+    // Skip ignored files and directories
+    if (ignoreList.includes(dirent.name)) {
+      continue;
     }
-    const dirName = path.basename(filePath);
-    const newZipFolder = zipFolder ? zipFolder.folder(dirName) : zip.folder(dirName);
-    const files = fs.readdirSync(fullPath);
-    files.forEach(file => {
-      addFileToZip(path.join(filePath, file), newZipFolder);
-    });
-  } else {
-    const fileName = path.basename(filePath);
-    const fileContent = fs.readFileSync(fullPath);
-    zipFolder.file(fileName, fileContent);
+
+    if (dirent.isDirectory()) {
+      // Recurse into subdirectories
+      await addFilesToZip(zip.folder(dirent.name), fullPath);
+    } else {
+      // Add files to the zip
+      const content = await fs.readFile(fullPath);
+      zip.file(dirent.name, content);
+    }
   }
 }
 
-console.log('Starting to zip project source...');
+async function createZip() {
+  const zip = new JSZip();
+  const rootDir = process.cwd();
 
-filesToInclude.forEach(fileOrDir => {
-    const fullPath = path.join(projectRoot, fileOrDir);
-    if (!fs.existsSync(fullPath)) {
-        console.warn(`Warning: Path not found, skipping: ${fileOrDir}`);
-        return;
-    }
+  console.log('Starting to zip the project directory...');
+  await addFilesToZip(zip, rootDir);
 
-    const stat = fs.statSync(fullPath);
-    if (stat.isDirectory()) {
-        const dirName = path.basename(fileOrDir);
-        const zipFolder = zip.folder(dirName);
-        const files = fs.readdirSync(fullPath);
-        files.forEach(file => {
-            addFileToZip(path.join(fileOrDir, file), zipFolder);
-        });
-    } else {
-        const fileName = path.basename(fileOrDir);
-        const fileContent = fs.readFileSync(fullPath);
-        zip.file(fileName, fileContent);
-    }
-});
-
-
-zip.generateAsync({ type: 'nodebuffer' })
-  .then(content => {
-    fs.writeFileSync(outputZipPath, content);
-    console.log(`✅ Project source code successfully zipped to ${outputZipPath}`);
-  })
-  .catch(err => {
-    console.error('❌ Error creating zip file:', err);
+  console.log('Generating zip file...');
+  const content = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: {
+      level: 9,
+    },
   });
+
+  const outputPath = path.join(rootDir, 'source-code.zip');
+  await fs.writeFile(outputPath, content);
+  console.log(`✅ Successfully created source-code.zip at ${outputPath}`);
+}
+
+createZip().catch((err) => {
+  console.error('❌ Failed to create zip file:', err);
+  process.exit(1);
+});
