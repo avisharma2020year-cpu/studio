@@ -84,12 +84,13 @@ export default function StudentDashboardPage() {
           
           const requestsQuery = query(
             collection(db, "requests"), 
-            where("studentId", "==", currentUser.id),
-            orderBy("timestamp", "desc"),
-            limit(3)
+            where("studentId", "==", currentUser.id)
           );
           const requestsSnapshot = await getDocs(requestsQuery);
-          const requestsData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+          const requestsData = requestsSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
+            .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) // Sort client-side
+            .slice(0, 3); // Get the 3 most recent
           setStudentRequests(requestsData);
 
           const eventsSnapshot = await getDocs(collection(db, "events"));
