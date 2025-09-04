@@ -29,12 +29,12 @@ export default function FacultyDashboardPage() {
   }, []);
 
   const fetchFacultyData = async () => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.name) return;
     setIsLoading(true);
     try {
         const requestsQuery = query(
             collection(db, "requests"),
-            where("facultyId", "==", currentUser.id),
+            where("approverName", "==", currentUser.name),
             where("status", "==", "Pending")
         );
         const requestsSnapshot = await getDocs(requestsQuery);
@@ -52,10 +52,10 @@ export default function FacultyDashboardPage() {
   };
 
   useEffect(() => {
-    if (currentUser) {
+    if (isClient && currentUser) {
         fetchFacultyData();
     }
-  }, [currentUser]);
+  }, [isClient, currentUser]);
 
   const handleUpdateRequestStatus = async (requestId: string, status: 'Approved' | 'Rejected') => {
     const comment = comments[requestId] || '';
