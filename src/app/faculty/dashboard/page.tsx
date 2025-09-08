@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
@@ -7,20 +6,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from '@/hooks/use-auth';
 import type { MissedClassRequest, PreApprovedEvent } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2 } from 'lucide-react';
+import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
 
 export default function FacultyDashboardPage() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
   const [requests, setRequests] = useState<MissedClassRequest[]>([]);
-  const [comments, setComments] = useState<Record<string, string>>({}); // { requestId: comment }
+  const [comments, setComments] = useState<Record<string, string>>({});
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [classes, setClasses] = useState<any[]>([]); // 👈 Faculty's timetable
   const [isLoading, setIsLoading] = useState(true);
   const [isClient, setIsClient] = useState(false);
 
@@ -32,28 +32,38 @@ export default function FacultyDashboardPage() {
     if (!currentUser?.name) return;
     setIsLoading(true);
     try {
-        const requestsQuery = query(
-            collection(db, "requests"),
-            where("approverName", "==", currentUser.name),
-            where("status", "==", "Pending")
-        );
-        const requestsSnapshot = await getDocs(requestsQuery);
-        const requestData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
-        setRequests(requestData);
+      // ---- Fetch Requests ----
+      const requestsQuery = query(
+        collection(db, "requests"),
+        where("approverName", "==", currentUser.name),
+        where("status", "==", "Pending")
+      );
+      const requestsSnapshot = await getDocs(requestsQuery);
+      const requestData = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest));
+      setRequests(requestData);
 
-        const eventsSnapshot = await getDocs(collection(db, "events"));
-        setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+      // ---- Fetch Events ----
+      const eventsSnapshot = await getDocs(collection(db, "events"));
+      setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
+
+      // ---- Fetch Faculty Timetable ----
+      const classesQuery = query(
+        collection(db, "timetables"),
+        where("facultyName", "==", currentUser.name)
+      );
+      const classesSnapshot = await getDocs(classesQuery);
+      setClasses(classesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
-        console.error("Error fetching faculty data:", error);
-        toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive"});
+      console.error("Error fetching faculty data:", error);
+      toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive"});
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     if (isClient && currentUser) {
-        fetchFacultyData();
+      fetchFacultyData();
     }
   }, [isClient, currentUser]);
 
@@ -66,22 +76,22 @@ export default function FacultyDashboardPage() {
 
     setIsLoading(true);
     try {
-        const requestDocRef = doc(db, "requests", requestId);
-        await updateDoc(requestDocRef, {
-            status,
-            facultyComment: comment
-        });
-        toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
-        await fetchFacultyData(); // Refresh the list
+      const requestDocRef = doc(db, "requests", requestId);
+      await updateDoc(requestDocRef, {
+        status,
+        facultyComment: comment
+      });
+      toast({ title: "Success", description: `Request ${status.toLowerCase()} successfully.` });
+      await fetchFacultyData();
     } catch (error) {
-        console.error("Error updating request:", error);
-        toast({ title: "Error", description: "Could not update the request status.", variant: "destructive"});
+      console.error("Error updating request:", error);
+      toast({ title: "Error", description: "Could not update the request status.", variant: "destructive"});
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
-   const getEventName = (eventId?: string) => {
+  const getEventName = (eventId?: string) => {
     if (!eventId) return 'N/A';
     return events.find(e => e.id === eventId)?.name || 'Unknown Event';
   }
@@ -96,9 +106,42 @@ export default function FacultyDashboardPage() {
 
   return (
     <div className="space-y-8">
+
+      {/* Faculty Classes */}
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-3xl font-headline flex items-center"><Inbox className="mr-3 h-8 w-8 text-primary" />Absence Requests for Approval</CardTitle>
+          <CardTitle className="text-3xl font-headline flex items-center">
+            <BookOpen className="mr-3 h-8 w-8 text-primary" /> My Classes
+          </CardTitle>
+          <CardDescription>Your scheduled classes from the uploaded timetable.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            </div>
+          ) : classes.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {classes.map(cls => (
+                <Card key={cls.id} className="p-4 bg-muted/20 rounded-lg shadow">
+                  <p className="font-semibold">{cls.subjectName}</p>
+                  <p>{cls.day} | {cls.timeSlot}</p>
+                  <p>Course: {cls.course} | Semester: {cls.semester}</p>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-center py-10">No classes assigned to you.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Absence Requests */}
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-3xl font-headline flex items-center">
+            <Inbox className="mr-3 h-8 w-8 text-primary" /> Absence Requests for Approval
+          </CardTitle>
           <CardDescription>Review pending absence requests assigned to you.</CardDescription>
         </CardHeader>
         <CardContent>
