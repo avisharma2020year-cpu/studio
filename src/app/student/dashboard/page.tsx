@@ -37,6 +37,7 @@ const staticApprovers = [
   { id: 'Dr. Disha Pathak', name: 'Dr. Disha Pathak' },
   { id: 'Dr. Meera', name: 'Dr. Meera' },
   { id: 'Dr. Syed Masroor', name: 'Dr. Syed Masroor' },
+  { id: 'Prof. Nidhi Bandaru', name: 'Prof. Nidhi Bandaru' },
 ];
 
 
@@ -382,3 +383,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    
