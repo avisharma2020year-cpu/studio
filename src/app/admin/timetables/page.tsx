@@ -87,8 +87,12 @@ export default function AdminTimetablesPage() {
   
   const handleSelectChange = (name: keyof Omit<TimetableEntry, 'id'>, value: string) => {
     if (name === 'facultyId') {
-      const selectedFaculty = facultyList.find(f => f.id === value);
-      setFormData(prev => ({ ...prev, facultyId: value, facultyName: selectedFaculty?.name || '' }));
+      if (value === 'none') {
+        setFormData(prev => ({ ...prev, facultyId: '', facultyName: '' }));
+      } else {
+        const selectedFaculty = facultyList.find(f => f.id === value);
+        setFormData(prev => ({ ...prev, facultyId: value, facultyName: selectedFaculty?.name || '' }));
+      }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -359,12 +363,12 @@ export default function AdminTimetablesPage() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="facultyId" className="text-right">Faculty</Label>
-              <Select value={formData.facultyId} onValueChange={(value) => handleSelectChange('facultyId', value)}>
+              <Select value={formData.facultyId || 'none'} onValueChange={(value) => handleSelectChange('facultyId', value)}>
                 <SelectTrigger id="facultyId" className="col-span-3">
                   <SelectValue placeholder="Select faculty (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {facultyList.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -387,3 +391,4 @@ export default function AdminTimetablesPage() {
     </div>
   );
 }
+
