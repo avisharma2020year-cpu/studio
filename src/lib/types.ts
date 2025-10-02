@@ -14,6 +14,7 @@ export interface User {
 
 export interface TimetableEntry {
   id: string;
+  date: string; // ISO date string
   day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   timeSlot: string; // e.g., "09:00 - 10:00"
   subjectName: string;
@@ -30,7 +31,7 @@ export interface MissedClassRequest {
   studentId: string;
   studentName: string;
   studentPrn: string;
-  missedClasses: { classId: string; subjectName: string; timeSlot: string; day: string }[];
+  missedClasses: { classId: string; subjectName: string; timeSlot: string; day: string, date: string }[];
   reason: string;
   eventId?: string; // Optional pre-approved event
   timestamp: string; // ISO date string

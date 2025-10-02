@@ -22,17 +22,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import type { TimetableEntry, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2, CalendarIcon } from 'lucide-react';
 import Papa from 'papaparse';
 import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
+import { format, getDay } from 'date-fns';
 
+const daysOfWeek: TimetableEntry['day'][] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const initialNewTimetableEntryState: Omit<TimetableEntry, 'id'> = {
-  day: 'Monday',
+const initialNewTimetableEntryState: Omit<TimetableEntry, 'id'|'day'> & { date: Date | undefined } = {
+  date: undefined,
   timeSlot: '',
   subjectName: '',
   facultyName: '',
@@ -41,7 +45,6 @@ const initialNewTimetableEntryState: Omit<TimetableEntry, 'id'> = {
   semester: 1,
 };
 
-const daysOfWeek: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export default function AdminTimetablesPage() {
   const { toast } = useToast();
@@ -55,7 +58,7 @@ export default function AdminTimetablesPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimetableEntry | null>(null);
-  const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'>>(initialNewTimetableEntryState);
+  const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'|'day'> & { date: Date | undefined }>(initialNewTimetableEntryState);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchTimetableData = async () => {
@@ -101,7 +104,7 @@ export default function AdminTimetablesPage() {
   const openFormForEdit = (entry: TimetableEntry) => {
     setEditingEntry(entry);
     setFormData({
-      day: entry.day,
+      date: new Date(entry.date),
       timeSlot: entry.timeSlot,
       subjectName: entry.subjectName,
       facultyName: entry.facultyName,
@@ -120,22 +123,28 @@ export default function AdminTimetablesPage() {
 
   const handleSubmit = async () => {
     // Basic validation
-    const requiredFields = ['day', 'timeSlot', 'subjectName', 'course', 'semester'];
+    const requiredFields: (keyof typeof formData)[] = ['date', 'timeSlot', 'subjectName', 'course', 'semester'];
     for (const field of requiredFields) {
-        if (!formData[field as keyof typeof formData]) {
+        if (!formData[field]) {
              toast({ title: "Error", description: `Field '${field}' is required.`, variant: "destructive" });
              return;
         }
+    }
+    
+    const finalData = {
+        ...formData,
+        date: format(formData.date!, 'yyyy-MM-dd'),
+        day: daysOfWeek[getDay(formData.date!)],
     }
 
     setIsLoading(true);
     try {
         if (editingEntry) {
             const entryDocRef = doc(db, "timetables", editingEntry.id);
-            await updateDoc(entryDocRef, formData);
+            await updateDoc(entryDocRef, finalData);
             toast({ title: "Success", description: "Timetable entry updated successfully." });
         } else {
-            await addDoc(collection(db, "timetables"), formData);
+            await addDoc(collection(db, "timetables"), finalData);
             toast({ title: "Success", description: "Timetable entry added successfully." });
         }
         await fetchTimetableData(); // Refresh data
@@ -236,7 +245,7 @@ export default function AdminTimetablesPage() {
   const filteredEntries = timetableEntries.filter(entry => 
     (courseFilter === 'all' || entry.course === courseFilter) &&
     (semesterFilter === 'all' || entry.semester.toString() === semesterFilter)
-  ).sort((a,b) => daysOfWeek.indexOf(a.day) - daysOfWeek.indexOf(b.day) || a.timeSlot.localeCompare(b.timeSlot));
+  ).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.timeSlot.localeCompare(b.timeSlot));
 
 
   return (
@@ -296,6 +305,7 @@ export default function AdminTimetablesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Date</TableHead>
                   <TableHead>Day</TableHead>
                   <TableHead>Time Slot</TableHead>
                   <TableHead>Subject</TableHead>
@@ -308,6 +318,7 @@ export default function AdminTimetablesPage() {
               <TableBody>
                 {filteredEntries.map(entry => (
                   <TableRow key={entry.id}>
+                    <TableCell>{format(new Date(entry.date), 'dd-MM-yyyy')}</TableCell>
                     <TableCell>{entry.day}</TableCell>
                     <TableCell>{entry.timeSlot}</TableCell>
                     <TableCell className="font-medium">{entry.subjectName}</TableCell>
@@ -342,16 +353,27 @@ export default function AdminTimetablesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="day" className="text-right">Day</Label>
-              <Select value={formData.day} onValueChange={(value) => handleSelectChange('day', value as TimetableEntry['day'])}>
-                <SelectTrigger id="day" className="col-span-3">
-                  <SelectValue placeholder="Select day" />
-                </SelectTrigger>
-                <SelectContent>
-                  {daysOfWeek.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
+             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="date" className="text-right">Date</Label>
+               <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className="col-span-3 justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.date ? format(formData.date, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={formData.date}
+                    onSelect={(d) => setFormData(prev => ({...prev, date: d}))}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="timeSlot" className="text-right">Time Slot</Label>
@@ -391,4 +413,3 @@ export default function AdminTimetablesPage() {
     </div>
   );
 }
-

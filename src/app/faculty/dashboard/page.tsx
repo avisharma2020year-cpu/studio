@@ -150,7 +150,7 @@ export default function FacultyDashboardPage() {
                         <h4 className="font-semibold text-sm mb-1 flex items-center"><CalendarClock className="mr-1.5 h-4 w-4 text-muted-foreground"/>Missed Classes:</h4>
                         <ul className="list-disc list-inside pl-1 text-sm space-y-0.5">
                           {req.missedClasses.map(mc => (
-                            <li key={mc.classId}>{mc.subjectName} ({mc.day} {mc.timeSlot})</li>
+                            <li key={mc.classId}>{mc.subjectName} ({format(new Date(mc.date), 'dd/MM/yyyy')})</li>
                           ))}
                         </ul>
                       </div>
@@ -208,5 +208,3 @@ export default function FacultyDashboardPage() {
     </div>
   );
 }
-
-    

@@ -1,11 +1,14 @@
 
 import { z } from 'zod';
+import { format, getDay } from 'date-fns';
 
-const daysEnum = z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
+const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
 // Base schema for a single, validated row.
 const TimetableRowSchema = z.object({
-  Day: daysEnum,
+  Date: z.coerce.date({
+    errorMap: () => ({ message: 'Invalid Date format. Please use YYYY-MM-DD.' }),
+  }),
   'Time Slot': z.string().min(1, { message: "Time Slot cannot be empty" }),
   Subject: z.string().min(1, { message: "Subject cannot be empty" }),
   Faculty: z.string().default(''), // Can be empty for things like "Library Session"
@@ -23,7 +26,7 @@ const FlexibleTimetableRowSchema = z.any().transform((arg) => {
 
     // Normalize keys: maps possible CSV headers to the strict schema headers.
     const normalized = {
-      Day: data.Day || data.day,
+      Date: data.Date || data.date,
       'Time Slot': data['Time Slot'] || data.timeSlot || data.timeslot || data.time_slot,
       Subject: data.Subject || data.subject,
       Faculty: data.Faculty || data.faculty,
@@ -34,10 +37,17 @@ const FlexibleTimetableRowSchema = z.any().transform((arg) => {
     const result = TimetableRowSchema.safeParse(normalized);
 
     if (result.success) {
-        return result.data;
+        const validatedData = result.data;
+        // Derive day from date
+        const dayOfWeek = daysOfWeek[getDay(validatedData.Date)];
+        return {
+          ...validatedData,
+          Date: format(validatedData.Date, 'yyyy-MM-dd'), // Standardize date format
+          Day: dayOfWeek,
+        };
     } else {
         // Log errors for debugging if needed, but return null to skip the row.
-        // console.warn('Skipping invalid row:', result.error.flatten().fieldErrors);
+        console.warn('Skipping invalid row:', result.error.flatten().fieldErrors);
         return null;
     }
 });

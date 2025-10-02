@@ -15,20 +15,19 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, query, where, orderBy, limit, doc } from 'firebase/firestore';
+import { format, parseISO, isFuture } from 'date-fns';
 
-// Helper to group timetable by day
-const groupTimetableByDay = (timetable: TimetableEntry[]) => {
+// Helper to group timetable by date
+const groupTimetableByDate = (timetable: TimetableEntry[]) => {
   return timetable.reduce((acc, entry) => {
-    const day = entry.day;
-    if (!acc[day]) {
-      acc[day] = [];
+    const date = entry.date;
+    if (!acc[date]) {
+      acc[date] = [];
     }
-    acc[day].push(entry);
+    acc[date].push(entry);
     return acc;
   }, {} as Record<string, TimetableEntry[]>);
 };
-
-const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function StudentDashboardPage() {
   const { toast } = useToast();
@@ -68,10 +67,12 @@ export default function StudentDashboardPage() {
           );
           
           const timetableSnapshot = await getDocs(timetableQuery);
-          const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+          const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry))
+            .filter(entry => isFuture(parseISO(entry.date)) || format(parseISO(entry.date), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')) // Filter for today and future dates
+            .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
           setAllTimetableEntries(userTimetable);
-          setTimetable(groupTimetableByDay(userTimetable));
+          setTimetable(groupTimetableByDate(userTimetable));
           
           const requestsQuery = query(
             collection(db, "requests"), 
@@ -137,7 +138,7 @@ export default function StudentDashboardPage() {
 
     const selectedClassDetails = selectedClasses.map(classId => {
       const cls = allTimetableEntries.find(c => c.id === classId)!;
-      return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day };
+      return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day, date: cls.date };
     });
     
     let approverName: string | undefined;
@@ -230,11 +231,13 @@ export default function StudentDashboardPage() {
     );
   }
 
+  const sortedTimetableDates = Object.keys(timetable).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
+
   return (
     <div className="space-y-8">
       <Card className="shadow-lg rounded-xl overflow-hidden">
         <CardHeader className="bg-muted/30">
-          <CardTitle className="text-3xl font-headline flex items-center"><CalendarDays className="mr-3 h-8 w-8 text-primary" />Weekly Timetable</CardTitle>
+          <CardTitle className="text-3xl font-headline flex items-center"><CalendarDays className="mr-3 h-8 w-8 text-primary" />Upcoming Classes</CardTitle>
           <CardDescription>Select classes you missed and submit an absence request below. {studentInfo}</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -242,15 +245,15 @@ export default function StudentDashboardPage() {
              <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
              </div>
-          ) : Object.keys(timetable).length > 0 ? (
+          ) : sortedTimetableDates.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {daysOrder.filter(day => timetable[day] && timetable[day].length > 0).map(day => (
-                <Card key={day} className="bg-background/50 shadow-md rounded-lg">
+              {sortedTimetableDates.map(date => (
+                <Card key={date} className="bg-background/50 shadow-md rounded-lg">
                   <CardHeader className="pb-3 pt-4">
-                    <CardTitle className="text-xl font-headline text-primary">{day}</CardTitle>
+                    <CardTitle className="text-xl font-headline text-primary">{format(parseISO(date), 'MMMM dd, yyyy')} ({timetable[date][0].day})</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {timetable[day].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
+                    {timetable[date].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
                       <div key={entry.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm">
                         <Checkbox
                           id={`class-${entry.id}`}
@@ -393,7 +396,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    
-
-    

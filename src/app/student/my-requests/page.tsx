@@ -131,7 +131,7 @@ export default function MyRequestsPage() {
                       <TableCell>
                         <ul className="list-disc list-inside text-xs space-y-0.5">
                           {req.missedClasses.map(mc => (
-                            <li key={mc.classId} className="whitespace-nowrap">{`${mc.subjectName} (${mc.day.substring(0,3)} ${mc.timeSlot})`}</li>
+                            <li key={mc.classId} className="whitespace-nowrap">{`${mc.subjectName} (${format(new Date(mc.date), 'dd/MM')})`}</li>
                           ))}
                         </ul>
                       </TableCell>

@@ -53,6 +53,7 @@ const uploadTimetableFlow = ai.defineFlow(
 
       return {
         id: `tt-upload-${Date.now()}-${index}`, // This ID is temporary and won't be saved
+        date: row.Date,
         day: row.Day as TimetableEntry['day'],
         timeSlot: row['Time Slot'],
         subjectName: row.Subject,
