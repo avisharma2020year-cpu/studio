@@ -29,13 +29,13 @@ export default function FacultyDashboardPage() {
   }, []);
 
   const fetchFacultyData = async () => {
-    if (!currentUser?.name) return;
+    if (!currentUser?.id) return;
     setIsLoading(true);
     try {
-      // ---- Fetch All Requests for this faculty member ----
+      // ---- Fetch All Requests for this faculty member using their actual ID ----
       const requestsQuery = query(
         collection(db, "requests"),
-        where("approverName", "==", currentUser.name)
+        where("facultyId", "==", currentUser.id)
       );
       const requestsSnapshot = await getDocs(requestsQuery);
       const requestData = requestsSnapshot.docs
@@ -208,3 +208,5 @@ export default function FacultyDashboardPage() {
     </div>
   );
 }
+
+    

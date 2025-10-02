@@ -30,17 +30,6 @@ const groupTimetableByDay = (timetable: TimetableEntry[]) => {
 
 const daysOrder: TimetableEntry['day'][] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-const staticApprovers = [
-  { id: 'Dr. Ravi Kiran', name: 'Dr. Ravi Kiran' },
-  { id: 'Dr. Ishaq Ahmed Dar', name: 'Dr. Ishaq Ahmed Dar' },
-  { id: 'Dr. Rajnikanth', name: 'Dr. Rajnikanth' },
-  { id: 'Dr. Disha Pathak', name: 'Dr. Disha Pathak' },
-  { id: 'Dr. Meera', name: 'Dr. Meera' },
-  { id: 'Dr. Syed Masroor', name: 'Dr. Syed Masroor' },
-  { id: 'Prof. Nidhi Bandaru', name: 'Prof. Nidhi Bandaru' },
-];
-
-
 export default function StudentDashboardPage() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -49,6 +38,7 @@ export default function StudentDashboardPage() {
   const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
   const [allTimetableEntries, setAllTimetableEntries] = useState<TimetableEntry[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
+  const [facultyList, setFacultyList] = useState<User[]>([]);
   
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [reason, setReason] = useState('');
@@ -97,6 +87,11 @@ export default function StudentDashboardPage() {
           const eventsSnapshot = await getDocs(collection(db, "events"));
           setEvents(eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PreApprovedEvent)));
 
+          const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
+          const facultySnapshot = await getDocs(facultyQuery);
+          setFacultyList(facultySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+
+
       } catch (error) {
           console.error("Error fetching student data:", error);
           toast({ title: "Error", description: "Could not load your dashboard data.", variant: "destructive" });
@@ -144,10 +139,25 @@ export default function StudentDashboardPage() {
       const cls = allTimetableEntries.find(c => c.id === classId)!;
       return { classId: cls.id, subjectName: cls.subjectName, timeSlot: cls.timeSlot, day: cls.day };
     });
+    
+    let approverName: string | undefined;
+    let facultyIdForRequest: string | undefined;
 
-    const approver = staticApprovers.find(a => a.id === selectedApprover);
-    const approverName = selectedApprover === 'other' ? otherApproverName : approver?.name;
-    const facultyIdForRequest = selectedApprover === 'other' ? 'admin-queue' : selectedApprover;
+    if (selectedApprover === 'other') {
+      approverName = otherApproverName;
+      facultyIdForRequest = 'admin-queue'; // A special ID for admins to query
+    } else {
+      const approver = facultyList.find(f => f.id === selectedApprover);
+      approverName = approver?.name;
+      facultyIdForRequest = approver?.id;
+    }
+
+
+    if (!approverName || !facultyIdForRequest) {
+      toast({ title: "Error", description: "Could not find the selected approver.", variant: "destructive"});
+      setIsSubmitting(false);
+      return;
+    }
 
     const newRequest: Omit<MissedClassRequest, 'id'> = {
         studentId: currentUser.id,
@@ -303,8 +313,8 @@ export default function StudentDashboardPage() {
                     <SelectValue placeholder="Select a faculty member..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {staticApprovers.map(approver => (
-                        <SelectItem key={approver.id} value={approver.id}>{approver.name}</SelectItem>
+                    {facultyList.map(faculty => (
+                        <SelectItem key={faculty.id} value={faculty.id}>{faculty.name}</SelectItem>
                     ))}
                      <SelectItem value="other">Other (Admin/Warden)</SelectItem>
                 </SelectContent>
@@ -383,5 +393,7 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    
 
     
