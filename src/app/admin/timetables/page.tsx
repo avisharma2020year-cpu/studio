@@ -31,7 +31,7 @@ import Papa from 'papaparse';
 import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
-import { format, getDay } from 'date-fns';
+import { format, getDay, isValid } from 'date-fns';
 
 const daysOfWeek: TimetableEntry['day'][] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -316,25 +316,29 @@ export default function AdminTimetablesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEntries.map(entry => (
-                  <TableRow key={entry.id}>
-                    <TableCell>{format(new Date(entry.date), 'dd-MM-yyyy')}</TableCell>
-                    <TableCell>{entry.day}</TableCell>
-                    <TableCell>{entry.timeSlot}</TableCell>
-                    <TableCell className="font-medium">{entry.subjectName}</TableCell>
-                    <TableCell>{entry.facultyName || 'N/A'}</TableCell>
-                    <TableCell>{entry.course}</TableCell>
-                    <TableCell>{entry.semester}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="icon" onClick={() => openFormForEdit(entry)} aria-label="Edit entry">
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button variant="destructive" size="icon" onClick={() => handleDeleteEntry(entry.id)} aria-label="Delete entry">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredEntries.map(entry => {
+                  const date = new Date(entry.date);
+                  const isDateValid = isValid(date);
+                  return (
+                    <TableRow key={entry.id}>
+                      <TableCell>{isDateValid ? format(date, 'dd-MM-yyyy') : 'Invalid Date'}</TableCell>
+                      <TableCell>{entry.day}</TableCell>
+                      <TableCell>{entry.timeSlot}</TableCell>
+                      <TableCell className="font-medium">{entry.subjectName}</TableCell>
+                      <TableCell>{entry.facultyName || 'N/A'}</TableCell>
+                      <TableCell>{entry.course}</TableCell>
+                      <TableCell>{entry.semester}</TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button variant="outline" size="icon" onClick={() => openFormForEdit(entry)} aria-label="Edit entry">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button variant="destructive" size="icon" onClick={() => handleDeleteEntry(entry.id)} aria-label="Delete entry">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             </div>
@@ -413,3 +417,5 @@ export default function AdminTimetablesPage() {
     </div>
   );
 }
+
+    
