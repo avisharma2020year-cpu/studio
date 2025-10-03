@@ -68,7 +68,6 @@ export default function StudentDashboardPage() {
           
           const timetableSnapshot = await getDocs(timetableQuery);
           const userTimetable = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry))
-            .filter(entry => entry.date && (isFuture(parseISO(entry.date)) || format(parseISO(entry.date), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))) // Filter for today and future dates
             .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
           setAllTimetableEntries(userTimetable);
