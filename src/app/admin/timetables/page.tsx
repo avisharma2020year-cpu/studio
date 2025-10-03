@@ -210,6 +210,8 @@ export default function AdminTimetablesPage() {
 
       if (snapshot.empty) {
         toast({ title: "No entries found", description: "No entries to delete for the selected filter." });
+        setIsDeleting(false);
+        setIsDeleteDialogOpen(false);
         return;
       }
 
@@ -364,7 +366,7 @@ export default function AdminTimetablesPage() {
                 className="w-full sm:w-auto"
             >
                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                Delete Filtered
+                Delete All
             </Button>
           </div>
         
@@ -509,6 +511,8 @@ export default function AdminTimetablesPage() {
     </div>
   );
 }
+
+    
 
     
 
