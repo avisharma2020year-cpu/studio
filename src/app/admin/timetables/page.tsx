@@ -15,6 +15,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,7 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import type { TimetableEntry, User } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2, CalendarIcon } from 'lucide-react';
+import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2, CalendarIcon, AlertTriangle } from 'lucide-react';
 import Papa from 'papaparse';
 import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
 import { db } from '@/lib/firebase';
@@ -57,6 +67,9 @@ export default function AdminTimetablesPage() {
   
   const [isUploading, setIsUploading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
   const [editingEntry, setEditingEntry] = useState<TimetableEntry | null>(null);
   const [formData, setFormData] = useState<Omit<TimetableEntry, 'id'|'day'> & { date: Date | undefined }>(initialNewTimetableEntryState);
   const [isLoading, setIsLoading] = useState(true);
@@ -131,10 +144,15 @@ export default function AdminTimetablesPage() {
         }
     }
     
+    if (!formData.date || !isValid(formData.date)) {
+        toast({ title: "Error", description: `A valid date is required.`, variant: "destructive" });
+        return;
+    }
+    
     const finalData = {
         ...formData,
-        date: format(formData.date!, 'yyyy-MM-dd'),
-        day: daysOfWeek[getDay(formData.date!)],
+        date: format(formData.date, 'yyyy-MM-dd'),
+        day: daysOfWeek[getDay(formData.date)],
     }
 
     setIsLoading(true);
@@ -174,6 +192,38 @@ export default function AdminTimetablesPage() {
     }
   };
   
+  const handleBulkDelete = async () => {
+    if (courseFilter === 'all' || semesterFilter === 'all') return;
+    
+    setIsDeleting(true);
+    try {
+        const q = query(
+            collection(db, "timetables"), 
+            where('course', '==', courseFilter), 
+            where('semester', '==', parseInt(semesterFilter))
+        );
+        const snapshot = await getDocs(q);
+        
+        if (snapshot.empty) {
+            toast({ title: "No entries found", description: "No entries to delete for the selected filter." });
+            return;
+        }
+
+        const batch = writeBatch(db);
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        toast({ title: "Success", description: `${snapshot.size} entries for ${courseFilter} Semester ${semesterFilter} deleted.` });
+        await fetchTimetableData();
+    } catch (error) {
+        console.error("Error during bulk delete:", error);
+        toast({ title: "Error", description: "Could not perform bulk delete.", variant: "destructive" });
+    } finally {
+        setIsDeleting(false);
+        setIsDeleteDialogOpen(false);
+    }
+};
+
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (fileInputRef.current) {
@@ -294,6 +344,15 @@ export default function AdminTimetablesPage() {
                 </SelectContent>
               </Select>
             </div>
+             <Button
+                variant="destructive"
+                onClick={() => setIsDeleteDialogOpen(true)}
+                disabled={courseFilter === 'all' || semesterFilter === 'all' || isDeleting}
+                className="w-full sm:w-auto"
+            >
+                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                Delete Filtered
+            </Button>
           </div>
         
            {isLoading && !isUploading ? (
@@ -347,6 +406,28 @@ export default function AdminTimetablesPage() {
           )}
         </CardContent>
       </Card>
+
+       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-6 w-6 text-destructive"/>Confirm Bulk Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete all timetable entries for{' '}
+              <span className="font-bold text-destructive">{courseFilter} - Semester {semesterFilter}</span>? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Yes, delete all'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-lg">
