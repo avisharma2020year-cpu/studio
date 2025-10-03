@@ -77,9 +77,8 @@ export default function AdminTimetablesPage() {
   const fetchTimetableData = async () => {
     setIsLoading(true);
     try {
-        const timetableSnapshot = await getDocs(collection(db, "timetables"));
-        const entries = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
-        setTimetableEntries(entries);
+        // We will set entries to empty to clear the view as requested.
+        setTimetableEntries([]);
 
         const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
         const usersSnapshot = await getDocs(facultyQuery);
