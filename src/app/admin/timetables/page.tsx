@@ -513,7 +513,3 @@ export default function AdminTimetablesPage() {
 }
 
     
-
-    
-
-    
