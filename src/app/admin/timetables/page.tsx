@@ -40,7 +40,7 @@ import { PlusCircle, Edit2, Trash2, Upload, CalendarDays, Filter, Loader2, Calen
 import Papa from 'papaparse';
 import { uploadTimetable } from '@/ai/flows/upload-timetable-flow';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, QueryConstraint } from 'firebase/firestore';
 import { format, getDay, isValid } from 'date-fns';
 
 const daysOfWeek: TimetableEntry['day'][] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -192,37 +192,50 @@ export default function AdminTimetablesPage() {
     }
   };
   
-  const handleBulkDelete = async () => {
-    if (courseFilter === 'all' || semesterFilter === 'all') return;
-    
+ const handleBulkDelete = async () => {
+    if (courseFilter === 'all' && semesterFilter === 'all') return;
+
     setIsDeleting(true);
     try {
-        const q = query(
-            collection(db, "timetables"), 
-            where('course', '==', courseFilter), 
-            where('semester', '==', parseInt(semesterFilter))
-        );
-        const snapshot = await getDocs(q);
-        
-        if (snapshot.empty) {
-            toast({ title: "No entries found", description: "No entries to delete for the selected filter." });
-            return;
-        }
+      const constraints: QueryConstraint[] = [];
+      if (courseFilter !== 'all') {
+        constraints.push(where('course', '==', courseFilter));
+      }
+      if (semesterFilter !== 'all') {
+        constraints.push(where('semester', '==', parseInt(semesterFilter)));
+      }
 
-        const batch = writeBatch(db);
-        snapshot.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
+      const q = query(collection(db, "timetables"), ...constraints);
+      const snapshot = await getDocs(q);
 
-        toast({ title: "Success", description: `${snapshot.size} entries for ${courseFilter} Semester ${semesterFilter} deleted.` });
-        await fetchTimetableData();
+      if (snapshot.empty) {
+        toast({ title: "No entries found", description: "No entries to delete for the selected filter." });
+        return;
+      }
+
+      const batch = writeBatch(db);
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      let description = `${snapshot.size} entries deleted successfully.`;
+      toast({ title: "Success", description });
+      await fetchTimetableData();
     } catch (error) {
-        console.error("Error during bulk delete:", error);
-        toast({ title: "Error", description: "Could not perform bulk delete.", variant: "destructive" });
+      console.error("Error during bulk delete:", error);
+      toast({ title: "Error", description: "Could not perform bulk delete.", variant: "destructive" });
     } finally {
-        setIsDeleting(false);
-        setIsDeleteDialogOpen(false);
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
     }
-};
+  };
+
+  const getBulkDeleteDescription = () => {
+    const courseText = courseFilter !== 'all' ? `course "${courseFilter}"` : '';
+    const semText = semesterFilter !== 'all' ? `Semester ${semesterFilter}` : '';
+    const connector = courseText && semText ? ' and ' : '';
+    return `Are you sure you want to delete all timetable entries for ${courseText}${connector}${semText}? This action cannot be undone.`
+  };
+
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -347,7 +360,7 @@ export default function AdminTimetablesPage() {
              <Button
                 variant="destructive"
                 onClick={() => setIsDeleteDialogOpen(true)}
-                disabled={courseFilter === 'all' || semesterFilter === 'all' || isDeleting}
+                disabled={(courseFilter === 'all' && semesterFilter === 'all') || isDeleting}
                 className="w-full sm:w-auto"
             >
                 {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
@@ -412,9 +425,7 @@ export default function AdminTimetablesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-6 w-6 text-destructive"/>Confirm Bulk Deletion</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete all timetable entries for{' '}
-              <span className="font-bold text-destructive">{courseFilter} - Semester {semesterFilter}</span>? 
-              This action cannot be undone.
+              {getBulkDeleteDescription()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -498,5 +509,7 @@ export default function AdminTimetablesPage() {
     </div>
   );
 }
+
+    
 
     
