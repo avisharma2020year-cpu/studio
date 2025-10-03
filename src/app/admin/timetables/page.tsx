@@ -77,8 +77,18 @@ export default function AdminTimetablesPage() {
   const fetchTimetableData = async () => {
     setIsLoading(true);
     try {
-        // We will set entries to empty to clear the view as requested.
-        setTimetableEntries([]);
+        const constraints: QueryConstraint[] = [];
+        if (courseFilter !== 'all') {
+          constraints.push(where('course', '==', courseFilter));
+        }
+        if (semesterFilter !== 'all') {
+          constraints.push(where('semester', '==', parseInt(semesterFilter)));
+        }
+
+        const timetableQuery = query(collection(db, "timetables"));
+        const timetableSnapshot = await getDocs(timetableQuery);
+        const timetableData = timetableSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimetableEntry));
+        setTimetableEntries(timetableData);
 
         const facultyQuery = query(collection(db, "users"), where("role", "==", "faculty"));
         const usersSnapshot = await getDocs(facultyQuery);
