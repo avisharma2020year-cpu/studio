@@ -102,7 +102,7 @@ export default function StudentDashboardPage() {
     if (currentUser) {
         fetchStudentData();
     }
-  }, [toast, currentUser]);
+  }, [toast, currentUser, currentUser?.course, currentUser?.semester]);
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev =>
