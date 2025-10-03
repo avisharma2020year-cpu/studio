@@ -238,8 +238,8 @@ export default function AdminTimetablesPage() {
     });
   };
 
-  const uniqueCourses = ['all', ...Array.from(new Set(timetableEntries.map(e => e.course)))];
-  const uniqueSemesters = ['all', ...Array.from(new Set(timetableEntries.map(e => e.semester.toString())))].sort();
+  const uniqueCourses = ['all', ...Array.from(new Set(timetableEntries.map(e => e.course).filter(Boolean)))];
+  const uniqueSemesters = ['all', ...Array.from(new Set(timetableEntries.map(e => e.semester.toString()).filter(Boolean)))].sort();
 
 
   const filteredEntries = timetableEntries.filter(entry => 
