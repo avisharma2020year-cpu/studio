@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 
@@ -130,9 +130,13 @@ export default function MyRequestsPage() {
                       <TableCell className="font-medium">{req.approverName}</TableCell>
                       <TableCell>
                         <ul className="list-disc list-inside text-xs space-y-0.5">
-                          {req.missedClasses.map(mc => (
-                            <li key={mc.classId} className="whitespace-nowrap">{`${mc.subjectName} (${format(new Date(mc.date), 'dd/MM')})`}</li>
-                          ))}
+                          {req.missedClasses.map(mc => {
+                             const classDate = new Date(mc.date);
+                             const isDateValid = isValid(classDate);
+                            return (
+                              <li key={mc.classId} className="whitespace-nowrap">{`${mc.subjectName} (${isDateValid ? format(classDate, 'dd/MM') : 'Invalid Date'})`}</li>
+                            )
+                          })}
                         </ul>
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-sm">{req.reason}</TableCell>
