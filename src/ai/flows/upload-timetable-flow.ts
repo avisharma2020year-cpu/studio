@@ -44,8 +44,8 @@ const uploadTimetableFlow = ai.defineFlow(
     );
 
     const newTimetable: TimetableEntry[] = validRows.map((row, index) => {
-      // Normalize faculty name from CSV for lookup
-      const lookupName = row.Faculty.trim().toLowerCase();
+      // Normalize faculty name from CSV for lookup, handle cases where it might be undefined
+      const lookupName = (row.Faculty || '').trim().toLowerCase();
       const facultyId = facultyMap.get(lookupName);
       
       // We don't skip if faculty is not found, we just leave the facultyId empty
@@ -57,7 +57,7 @@ const uploadTimetableFlow = ai.defineFlow(
         day: row.Day as TimetableEntry['day'],
         timeSlot: row['Time Slot'],
         subjectName: row.Subject,
-        facultyName: row.Faculty,
+        facultyName: row.Faculty || '',
         facultyId: facultyId || '', 
         course: row.Course,
         semester: row.Semester,
