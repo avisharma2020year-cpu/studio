@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, query, where, orderBy, limit, doc } from 'firebase/firestore';
-import { format, parseISO, isFuture } from 'date-fns';
+import { format, parseISO, isFuture, isValid } from 'date-fns';
 
 // Helper to group timetable by date
 const groupTimetableByDate = (timetable: TimetableEntry[]) => {
@@ -246,31 +246,36 @@ export default function StudentDashboardPage() {
              </div>
           ) : sortedTimetableDates.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sortedTimetableDates.map(date => (
-                <Card key={date} className="bg-background/50 shadow-md rounded-lg">
-                  <CardHeader className="pb-3 pt-4">
-                    <CardTitle className="text-xl font-headline text-primary">{format(parseISO(date), 'MMMM dd, yyyy')} ({timetable[date][0].day})</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {timetable[date].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
-                      <div key={entry.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm">
-                        <Checkbox
-                          id={`class-${entry.id}`}
-                          checked={selectedClasses.includes(entry.id)}
-                          onCheckedChange={() => handleClassSelection(entry.id)}
-                          aria-label={`Select class ${entry.subjectName} at ${entry.timeSlot}`}
-                          className="border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                        />
-                        <Label htmlFor={`class-${entry.id}`} className="flex-grow cursor-pointer">
-                          <span className="block font-semibold">{entry.subjectName}</span>
-                          <span className="block text-sm text-muted-foreground">{entry.timeSlot}</span>
-                          <span className="block text-xs text-muted-foreground">Prof. {entry.facultyName || 'N/A'}</span>
-                        </Label>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              ))}
+              {sortedTimetableDates.map(date => {
+                const parsedDate = parseISO(date);
+                if (!isValid(parsedDate)) return null; // Skip rendering if date is invalid
+
+                return (
+                  <Card key={date} className="bg-background/50 shadow-md rounded-lg">
+                    <CardHeader className="pb-3 pt-4">
+                      <CardTitle className="text-xl font-headline text-primary">{format(parsedDate, 'MMMM dd, yyyy')} ({timetable[date][0].day})</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {timetable[date].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
+                        <div key={entry.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm">
+                          <Checkbox
+                            id={`class-${entry.id}`}
+                            checked={selectedClasses.includes(entry.id)}
+                            onCheckedChange={() => handleClassSelection(entry.id)}
+                            aria-label={`Select class ${entry.subjectName} at ${entry.timeSlot}`}
+                            className="border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                          />
+                          <Label htmlFor={`class-${entry.id}`} className="flex-grow cursor-pointer">
+                            <span className="block font-semibold">{entry.subjectName}</span>
+                            <span className="block text-sm text-muted-foreground">{entry.timeSlot}</span>
+                            <span className="block text-xs text-muted-foreground">Prof. {entry.facultyName || 'N/A'}</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           ) : (
             <p className="text-muted-foreground text-center py-8">Your timetable is not yet available. Please check back later or contact administration.</p>
@@ -395,3 +400,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    
