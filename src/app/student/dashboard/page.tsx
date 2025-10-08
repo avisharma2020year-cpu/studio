@@ -47,6 +47,7 @@ export default function StudentDashboardPage() {
   const [selectedApprover, setSelectedApprover] = useState<string | undefined>(undefined);
   const [otherApproverName, setOtherApproverName] = useState('');
   const [isClient, setIsClient] = useState(false);
+  const [sortedTimetableDates, setSortedTimetableDates] = useState<string[]>([]);
 
   useEffect(() => {
     setIsClient(true);
@@ -71,7 +72,9 @@ export default function StudentDashboardPage() {
             .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
           setAllTimetableEntries(userTimetable);
-          setTimetable(groupTimetableByDate(userTimetable));
+          const groupedTimetable = groupTimetableByDate(userTimetable);
+          setTimetable(groupedTimetable);
+          setSortedTimetableDates(Object.keys(groupedTimetable).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()));
           
           const requestsQuery = query(
             collection(db, "requests"), 
@@ -229,8 +232,6 @@ export default function StudentDashboardPage() {
       </div>
     );
   }
-
-  const sortedTimetableDates = Object.keys(timetable).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
 
   return (
     <div className="space-y-8">
