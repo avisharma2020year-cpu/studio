@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { MissedClassRequest, PreApprovedEvent, RequestStatus } from '@/lib/types';
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, UserCircle, CalendarClock, MessageSquare, Inbox, Loader2, CheckCircle, Clock, XCircle } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
@@ -149,9 +149,13 @@ export default function FacultyDashboardPage() {
                       <div>
                         <h4 className="font-semibold text-sm mb-1 flex items-center"><CalendarClock className="mr-1.5 h-4 w-4 text-muted-foreground"/>Missed Classes:</h4>
                         <ul className="list-disc list-inside pl-1 text-sm space-y-0.5">
-                          {req.missedClasses.map(mc => (
-                            <li key={mc.classId}>{mc.subjectName} ({format(new Date(mc.date), 'dd/MM/yyyy')})</li>
-                          ))}
+                          {req.missedClasses.map(mc => {
+                            const classDate = new Date(mc.date);
+                            const isDateValid = isValid(classDate);
+                            return (
+                                <li key={mc.classId}>{mc.subjectName} ({isDateValid ? format(classDate, 'dd/MM/yyyy') : 'Invalid Date'})</li>
+                            )
+                          })}
                         </ul>
                       </div>
                       <div>
@@ -208,3 +212,5 @@ export default function FacultyDashboardPage() {
     </div>
   );
 }
+
+    
