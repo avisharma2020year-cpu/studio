@@ -16,25 +16,13 @@ import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, query, where, orderBy, limit, doc } from 'firebase/firestore';
 import { format, parseISO, isFuture, isValid } from 'date-fns';
-
-// Helper to group timetable by date
-const groupTimetableByDate = (timetable: TimetableEntry[]) => {
-  return timetable.reduce((acc, entry) => {
-    const date = entry.date;
-    if (!acc[date]) {
-      acc[date] = [];
-    }
-    acc[date].push(entry);
-    return acc;
-  }, {} as Record<string, TimetableEntry[]>);
-};
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function StudentDashboardPage() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
   const [isLoading, setIsLoading] = useState(true);
-  const [timetable, setTimetable] = useState<Record<string, TimetableEntry[]>>({});
   const [allTimetableEntries, setAllTimetableEntries] = useState<TimetableEntry[]>([]);
   const [events, setEvents] = useState<PreApprovedEvent[]>([]);
   const [facultyList, setFacultyList] = useState<User[]>([]);
@@ -47,7 +35,6 @@ export default function StudentDashboardPage() {
   const [selectedApprover, setSelectedApprover] = useState<string | undefined>(undefined);
   const [otherApproverName, setOtherApproverName] = useState('');
   const [isClient, setIsClient] = useState(false);
-  const [sortedTimetableDates, setSortedTimetableDates] = useState<string[]>([]);
 
   useEffect(() => {
     setIsClient(true);
@@ -57,7 +44,7 @@ export default function StudentDashboardPage() {
     const fetchStudentData = async () => {
       if (!currentUser?.course || !currentUser?.semester) {
           setIsLoading(false);
-          return; // Early exit if essential user data is missing
+          return; 
       }
       setIsLoading(true);
       try {
@@ -72,9 +59,6 @@ export default function StudentDashboardPage() {
             .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           
           setAllTimetableEntries(userTimetable);
-          const groupedTimetable = groupTimetableByDate(userTimetable);
-          setTimetable(groupedTimetable);
-          setSortedTimetableDates(Object.keys(groupedTimetable).sort((a, b) => new Date(a).getTime() - new Date(b).getTime()));
           
           const requestsQuery = query(
             collection(db, "requests"), 
@@ -83,8 +67,8 @@ export default function StudentDashboardPage() {
           const requestsSnapshot = await getDocs(requestsQuery);
           const requestsData = requestsSnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as MissedClassRequest))
-            .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) // Sort client-side
-            .slice(0, 3); // Get the 3 most recent
+            .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) 
+            .slice(0, 3);
           setStudentRequests(requestsData);
 
           const eventsSnapshot = await getDocs(collection(db, "events"));
@@ -102,10 +86,10 @@ export default function StudentDashboardPage() {
           setIsLoading(false);
       }
     };
-    if (currentUser) {
+    if (isClient && currentUser) {
         fetchStudentData();
     }
-  }, [toast, currentUser, currentUser?.course, currentUser?.semester]);
+  }, [toast, isClient, currentUser, currentUser?.course, currentUser?.semester]);
 
   const handleClassSelection = (classId: string) => {
     setSelectedClasses(prev =>
@@ -148,7 +132,7 @@ export default function StudentDashboardPage() {
 
     if (selectedApprover === 'other') {
       approverName = otherApproverName;
-      facultyIdForRequest = 'admin-queue'; // A special ID for admins to query
+      facultyIdForRequest = 'admin-queue';
     } else {
       const approver = facultyList.find(f => f.id === selectedApprover);
       approverName = approver?.name;
@@ -227,8 +211,8 @@ export default function StudentDashboardPage() {
 
   if (!isClient) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
       </div>
     );
   }
@@ -237,7 +221,7 @@ export default function StudentDashboardPage() {
     <div className="space-y-8">
       <Card className="shadow-lg rounded-xl overflow-hidden">
         <CardHeader className="bg-muted/30">
-          <CardTitle className="text-3xl font-headline flex items-center"><CalendarDays className="mr-3 h-8 w-8 text-primary" />Upcoming Classes</CardTitle>
+          <CardTitle className="text-3xl font-headline flex items-center"><CalendarDays className="mr-3 h-8 w-8 text-primary" />Your Timetable</CardTitle>
           <CardDescription>Select classes you missed and submit an absence request below. {studentInfo}</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -245,38 +229,43 @@ export default function StudentDashboardPage() {
              <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
              </div>
-          ) : sortedTimetableDates.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sortedTimetableDates.map(date => {
-                const parsedDate = parseISO(date);
-                if (!isValid(parsedDate)) return null; // Skip rendering if date is invalid
-
-                return (
-                  <Card key={date} className="bg-background/50 shadow-md rounded-lg">
-                    <CardHeader className="pb-3 pt-4">
-                      <CardTitle className="text-xl font-headline text-primary">{format(parsedDate, 'MMMM dd, yyyy')} ({timetable[date][0].day})</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {timetable[date].sort((a,b) => a.timeSlot.localeCompare(b.timeSlot)).map(entry => (
-                        <div key={entry.id} className="flex items-center space-x-3 p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm">
-                          <Checkbox
-                            id={`class-${entry.id}`}
-                            checked={selectedClasses.includes(entry.id)}
-                            onCheckedChange={() => handleClassSelection(entry.id)}
-                            aria-label={`Select class ${entry.subjectName} at ${entry.timeSlot}`}
-                            className="border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                          />
-                          <Label htmlFor={`class-${entry.id}`} className="flex-grow cursor-pointer">
-                            <span className="block font-semibold">{entry.subjectName}</span>
-                            <span className="block text-sm text-muted-foreground">{entry.timeSlot}</span>
-                            <span className="block text-xs text-muted-foreground">Prof. {entry.facultyName || 'N/A'}</span>
-                          </Label>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+          ) : allTimetableEntries.length > 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Day</TableHead>
+                    <TableHead>Time Slot</TableHead>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Faculty</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allTimetableEntries.map(entry => {
+                    const date = entry.date ? parseISO(entry.date) : null;
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                           <Checkbox
+                              id={`class-${entry.id}`}
+                              checked={selectedClasses.includes(entry.id)}
+                              onCheckedChange={() => handleClassSelection(entry.id)}
+                              aria-label={`Select class ${entry.subjectName} at ${entry.timeSlot}`}
+                              className="border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                            />
+                        </TableCell>
+                        <TableCell>{date && isValid(date) ? format(date, 'MMM dd, yyyy') : 'N/A'}</TableCell>
+                        <TableCell>{entry.day}</TableCell>
+                        <TableCell>{entry.timeSlot}</TableCell>
+                        <TableCell className="font-semibold">{entry.subjectName}</TableCell>
+                        <TableCell>{entry.facultyName || 'N/A'}</TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
             </div>
           ) : (
             <p className="text-muted-foreground text-center py-8">Your timetable is not yet available. Please check back later or contact administration.</p>
@@ -401,5 +390,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    
