@@ -209,7 +209,7 @@ export default function StudentDashboardPage() {
     ? `Your course: ${currentUser.course}, Semester: ${currentUser.semester}.`
     : "Loading student data...";
 
-  if (!isClient) {
+  if (!isClient || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -225,11 +225,7 @@ export default function StudentDashboardPage() {
           <CardDescription>Select classes you missed and submit an absence request below. {studentInfo}</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {isLoading ? (
-             <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-             </div>
-          ) : allTimetableEntries.length > 0 ? (
+          {allTimetableEntries.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -390,3 +386,5 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
+
+    
